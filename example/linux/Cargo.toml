@@ -1,0 +1,11 @@
+[package]
+name = "linux-example"
+version = "0.1.0"
+authors = ["pavver <pavvers1@gmail.com>"]
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+linux-embedded-hal = "0.4"
+embedded-hal = "1.0"
+AS5600-Driver = { path = "../..", features = ["std", "anyhow"] }

@@ -1,0 +1,25 @@
+[package]
+name = "AS5600-Driver"
+version = "0.1.0"
+edition = "2024"
+authors = ["pavver <pavvers1@gmail.com>"]
+description = "A platform-agnostic driver for the AS5600 magnetic rotary encoder using embedded-hal."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["AS5600", "encoder", "magnetic", "embedded-hal", "driver"]
+categories = ["embedded", "hardware-support", "no-std"]
+repository = "https://github.com/pavver/AS5600-Driver"
+
+[features]
+# By default, we are no_std
+default = []
+# Enables standard library support (for error trait etc.)
+std = []
+# Enables anyhow integration (requires std)
+anyhow = ["dep:anyhow", "std"]
+# Enables mock driver (requires std for Arc/Mutex)
+mock = ["std"]
+
+[dependencies]
+embedded-hal = "1.0"
+anyhow = { version = "1.0", optional = true }

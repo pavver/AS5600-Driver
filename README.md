@@ -43,6 +43,32 @@ AS5600-river = { version = "0.1.0", features = ["std", "anyhow"] }
 
 ## 🛠 Usage Examples
 
+```rust
+let i2c = I2cdev::new("/dev/i2c-1")?;
+let mut encoder = AS5600Driver::new(i2c);
+
+let raw = encoder.read_raw_angle()?;
+let filtered = encoder.read_angle()?;
+let status = encoder.get_magnet_status()?;
+let status_raw = encoder.get_status_raw()?;
+let magnitude = encoder.get_magnitude()?;
+let agc = encoder.get_agc()?;
+let burn_count = encoder.get_burn_count()?;
+let conf = encoder.get_config()?;
+
+let det_sym = if status.detected { "✅ YES" } else { "❌ NO " };
+let low_sym = if status.too_weak { "⚠️ LOW " } else { "✅ OK  " };
+let high_sym = if status.too_strong { "⚠️ HIGH" } else { "✅ OK  " };
+
+let wd_status = if conf.watchdog { "⚡ ON " } else { "💤 OFF" };
+let pm_str = format!("{:?}", conf.power_mode);
+let hyst_str = format!("{:?}", conf.hysteresis);
+let out_str = format!("{:?}", conf.output_stage);
+let pwm_str = format!("{:?}", conf.pwm_frequency);
+let slow_str = format!("{:?}", conf.slow_filter);
+let fast_str = format!("{:?}", conf.fast_filter_threshold);
+```
+
 All examples provide a real-time monitoring dashboard as shown below:
 
 ![AS5600 Dashboard Preview](image.png)

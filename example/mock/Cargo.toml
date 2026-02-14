@@ -6,4 +6,4 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0"
-AS5600-Driver = { path = "../..", features = ["mock", "std", "anyhow"] }
+AS5600-Driver = { version = "0.1.0", features = ["mock", "std", "anyhow"] }

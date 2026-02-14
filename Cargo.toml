@@ -1,6 +1,6 @@
 [package]
 name = "AS5600-Driver"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["pavver <pavvers1@gmail.com>"]
 description = "A platform-agnostic driver for the AS5600 magnetic rotary encoder using embedded-hal."

@@ -33,21 +33,13 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
         Ok(buf[0])
     }
 
-    /// Internal helper to write a single byte to a register.
-    fn write_u8(&mut self, reg: u8, value: u8) -> Result<(), AS56Error<I2C::Error>> {
-        self.i2c
-            .write(self.address, &[reg, value])
-            .map_err(AS56Error::I2c)?;
-        Ok(())
-    }
-
     /// Internal helper to read a 12-bit value from two consecutive registers.
     fn read_u16(&mut self, reg_hi: u8) -> Result<u16, AS56Error<I2C::Error>> {
         let mut buf = [0u8; 2];
         self.i2c
             .write_read(self.address, &[reg_hi], &mut buf)
             .map_err(AS56Error::I2c)?;
-        Ok(u16::from_be_bytes(buf) & 0x0FFF)
+        Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
     }
 
     /// Internal helper to write a 12-bit value to two consecutive registers.
@@ -62,7 +54,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
     /// **DANGER**: Permanently burns ZPOS and MPOS settings to the chip.
     pub unsafe fn danger_permanent_burn_settings(&mut self) -> Result<(), AS56Error<I2C::Error>> {
         self.i2c
-            .write(self.address, &[regs::BURN, 0x80])
+            .write(self.address, &[regs::BURN, regs::BURN_SETTINGS_CMD])
             .map_err(AS56Error::I2c)?;
         Ok(())
     }
@@ -70,7 +62,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
     /// **DANGER**: Permanently burns Configuration settings to the chip.
     pub unsafe fn danger_permanent_burn_config(&mut self) -> Result<(), AS56Error<I2C::Error>> {
         self.i2c
-            .write(self.address, &[regs::BURN, 0x40])
+            .write(self.address, &[regs::BURN, regs::BURN_CONFIG_CMD])
             .map_err(AS56Error::I2c)?;
         Ok(())
     }
@@ -88,7 +80,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn get_burn_count(&mut self) -> Result<u8, AS56Error<Self::Error>> {
-        Ok(self.read_u8(regs::ZMCO)? & 0x03)
+        Ok(self.read_u8(regs::ZMCO)? & regs::ZMCO_MASK)
     }
 
     fn get_status_raw(&mut self) -> Result<u8, AS56Error<Self::Error>> {
@@ -98,9 +90,9 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     fn get_magnet_status(&mut self) -> Result<MagnetStatus, AS56Error<Self::Error>> {
         let val = self.read_u8(regs::STATUS)?;
         Ok(MagnetStatus {
-            detected: (val & 0x20) != 0,
-            too_weak: (val & 0x10) != 0,
-            too_strong: (val & 0x08) != 0,
+            detected: (val & regs::STATUS_MD_MASK) != 0,
+            too_weak: (val & regs::STATUS_ML_MASK) != 0,
+            too_strong: (val & regs::STATUS_MH_MASK) != 0,
         })
     }
 
@@ -113,40 +105,44 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn get_config(&mut self) -> Result<Configuration, AS56Error<Self::Error>> {
-        let hi = self.read_u8(regs::CONF_HI)?;
-        let lo = self.read_u8(regs::CONF_LO)?;
+        let mut buf = [0u8; 2];
+        self.i2c
+            .write_read(self.address, &[regs::CONF_HI], &mut buf)
+            .map_err(AS56Error::I2c)?;
+        let hi = buf[0];
+        let lo = buf[1];
 
         Ok(Configuration {
-            power_mode: match lo & 0x03 {
+            power_mode: match lo & regs::CONF_PM_MASK {
                 0b01 => PowerMode::LPM1,
                 0b10 => PowerMode::LPM2,
                 0b11 => PowerMode::LPM3,
                 _ => PowerMode::Nominal,
             },
-            hysteresis: match (lo >> 2) & 0x03 {
+            hysteresis: match (lo & regs::CONF_HYST_MASK) >> 2 {
                 0b01 => Hysteresis::Lsb1,
                 0b10 => Hysteresis::Lsb2,
                 0b11 => Hysteresis::Lsb3,
                 _ => Hysteresis::Off,
             },
-            output_stage: match (lo >> 4) & 0x03 {
+            output_stage: match (lo & regs::CONF_OUTS_MASK) >> 4 {
                 0b01 => OutputStage::AnalogReduced,
                 0b10 => OutputStage::PWM,
                 _ => OutputStage::AnalogFull,
             },
-            pwm_frequency: match (lo >> 6) & 0x03 {
+            pwm_frequency: match (lo & regs::CONF_PWMF_MASK) >> 6 {
                 0b01 => PwmFrequency::Hz230,
                 0b10 => PwmFrequency::Hz460,
                 0b11 => PwmFrequency::Hz920,
                 _ => PwmFrequency::Hz115,
             },
-            slow_filter: match hi & 0x03 {
+            slow_filter: match hi & regs::CONF_SF_MASK {
                 0b01 => SlowFilter::X8,
                 0b10 => SlowFilter::X4,
                 0b11 => SlowFilter::X2,
                 _ => SlowFilter::X16,
             },
-            fast_filter_threshold: match (hi >> 2) & 0x07 {
+            fast_filter_threshold: match (hi & regs::CONF_FTH_MASK) >> 2 {
                 0b001 => FastFilterThreshold::Lsb6,
                 0b010 => FastFilterThreshold::Lsb7,
                 0b011 => FastFilterThreshold::Lsb9,
@@ -156,7 +152,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
                 0b111 => FastFilterThreshold::Lsb10,
                 _ => FastFilterThreshold::SlowOnly,
             },
-            watchdog: (hi & 0x20) != 0,
+            watchdog: (hi & regs::CONF_WD_MASK) != 0,
         })
     }
 
@@ -170,8 +166,9 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
             | ((config.hysteresis as u8) << 2)
             | (config.power_mode as u8);
 
-        self.write_u8(regs::CONF_HI, hi)?;
-        self.write_u8(regs::CONF_LO, lo)?;
+        self.i2c
+            .write(self.address, &[regs::CONF_HI, hi, lo])
+            .map_err(AS56Error::I2c)?;
         Ok(())
     }
 
@@ -180,7 +177,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn set_zero_position(&mut self, angle: u16) -> Result<(), AS56Error<Self::Error>> {
-        self.write_u16(regs::ZPOS_HI, angle & 0x0FFF)
+        self.write_u16(regs::ZPOS_HI, angle & regs::ZPOS_MASK)
     }
 
     fn get_max_position(&mut self) -> Result<u16, AS56Error<Self::Error>> {
@@ -188,7 +185,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn set_max_position(&mut self, angle: u16) -> Result<(), AS56Error<Self::Error>> {
-        self.write_u16(regs::MPOS_HI, angle & 0x0FFF)
+        self.write_u16(regs::MPOS_HI, angle & regs::MPOS_MASK)
     }
 
     fn get_max_angle(&mut self) -> Result<u16, AS56Error<Self::Error>> {
@@ -196,6 +193,32 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn set_max_angle(&mut self, angle: u16) -> Result<(), AS56Error<Self::Error>> {
-        self.write_u16(regs::MANG_HI, angle & 0x0FFF)
+        self.write_u16(regs::MANG_HI, angle & regs::MANG_MASK)
+    }
+
+    fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS56Error<Self::Error>> {
+        // Read from STATUS (0x0B) to MAGNITUDE_LO (0x1C) = 18 bytes
+        let mut buf = [0u8; 18];
+        self.i2c
+            .write_read(self.address, &[regs::STATUS], &mut buf)
+            .map_err(AS56Error::I2c)?;
+
+        let status_val = buf[0];
+        let raw_angle = u16::from_be_bytes([buf[1], buf[2]]) & regs::ANGLE_MASK;
+        let angle = u16::from_be_bytes([buf[3], buf[4]]) & regs::ANGLE_MASK;
+        let agc = buf[15]; // AGC is at 0x1A, which is 0x0B + 15
+        let magnitude = u16::from_be_bytes([buf[16], buf[17]]) & regs::ANGLE_MASK;
+
+        Ok(Diagnostics {
+            angle,
+            raw_angle,
+            magnet_status: MagnetStatus {
+                detected: (status_val & regs::STATUS_MD_MASK) != 0,
+                too_weak: (status_val & regs::STATUS_ML_MASK) != 0,
+                too_strong: (status_val & regs::STATUS_MH_MASK) != 0,
+            },
+            agc,
+            magnitude,
+        })
     }
 }

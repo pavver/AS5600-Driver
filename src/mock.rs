@@ -40,9 +40,9 @@ impl AS56Mock {
     pub fn new() -> Self {
         let mut registers = [0u8; 256];
         // Default healthy state
-        registers[regs::STATUS as usize] = 0x20; // Detected
+        registers[regs::STATUS as usize] = regs::STATUS_MD_MASK; // Detected
         registers[regs::AGC as usize] = 100;
-        registers[regs::CONF_HI as usize] = 0x20; // Watchdog ON
+        registers[regs::CONF_HI as usize] = regs::CONF_WD_MASK; // Watchdog ON
 
         Self {
             state: Arc::new(Mutex::new(MockState { registers })),
@@ -54,7 +54,7 @@ impl AS56Mock {
     /// Sets the raw angle that the mock will report.
     pub fn mock_set_raw_angle(&self, angle: u16) {
         let mut state = self.state.lock().unwrap();
-        let bytes = (angle & 0x0FFF).to_be_bytes();
+        let bytes = (angle & regs::ANGLE_MASK).to_be_bytes();
         state.registers[regs::RAW_ANGLE_HI as usize] = bytes[0];
         state.registers[regs::RAW_ANGLE_LO as usize] = bytes[1];
     }
@@ -64,13 +64,13 @@ impl AS56Mock {
         let mut state = self.state.lock().unwrap();
         let mut val = 0u8;
         if status.detected {
-            val |= 0x20;
+            val |= regs::STATUS_MD_MASK;
         }
         if status.too_weak {
-            val |= 0x10;
+            val |= regs::STATUS_ML_MASK;
         }
         if status.too_strong {
-            val |= 0x08;
+            val |= regs::STATUS_MH_MASK;
         }
         state.registers[regs::STATUS as usize] = val;
     }
@@ -84,7 +84,7 @@ impl AS56Mock {
     /// Sets the internal magnitude value.
     pub fn mock_set_magnitude(&self, magnitude: u16) {
         let mut state = self.state.lock().unwrap();
-        let bytes = magnitude.to_be_bytes();
+        let bytes = (magnitude & regs::ANGLE_MASK).to_be_bytes();
         state.registers[regs::MAGNITUDE_HI as usize] = bytes[0];
         state.registers[regs::MAGNITUDE_LO as usize] = bytes[1];
     }

@@ -53,4 +53,7 @@ pub trait AS5600Interface {
 
     /// Sets the maximum angle (MANG) in volatile memory.
     fn set_max_angle(&mut self, angle: u16) -> Result<(), AS56Error<Self::Error>>;
+
+    /// Reads all diagnostic data (Angle, Raw Angle, Status, AGC, Magnitude) in one optimized transaction.
+    fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS56Error<Self::Error>>;
 }

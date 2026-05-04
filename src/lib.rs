@@ -48,6 +48,8 @@ pub use driver::AS5600Driver;
 pub use error::AS56Error;
 pub use regs::*;
 pub use traits::AS5600Interface;
+#[cfg(feature = "async")]
+pub use traits::AS5600AsyncInterface;
 pub use types::*;
 
 #[cfg(feature = "mock")]

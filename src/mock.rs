@@ -138,3 +138,31 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS56Mock {
         unimplemented!("Full I2C transactions are not implemented in this mock")
     }
 }
+
+#[cfg(feature = "async")]
+impl embedded_hal_async::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS56Mock {
+    async fn read(&mut self, address: u8, read: &mut [u8]) -> Result<(), Self::Error> {
+        embedded_hal::i2c::I2c::read(self, address, read)
+    }
+
+    async fn write(&mut self, address: u8, write: &[u8]) -> Result<(), Self::Error> {
+        embedded_hal::i2c::I2c::write(self, address, write)
+    }
+
+    async fn write_read(
+        &mut self,
+        address: u8,
+        write: &[u8],
+        read: &mut [u8],
+    ) -> Result<(), Self::Error> {
+        embedded_hal::i2c::I2c::write_read(self, address, write, read)
+    }
+
+    async fn transaction(
+        &mut self,
+        address: u8,
+        operations: &mut [embedded_hal::i2c::Operation<'_>],
+    ) -> Result<(), Self::Error> {
+        embedded_hal::i2c::I2c::transaction(self, address, operations)
+    }
+}

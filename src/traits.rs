@@ -57,3 +57,27 @@ pub trait AS5600Interface {
     /// Reads all diagnostic data (Angle, Raw Angle, Status, AGC, Magnitude) in one optimized transaction.
     fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS56Error<Self::Error>>;
 }
+
+/// Asynchronous interface for the AS5600 sensor.
+#[cfg(feature = "async")]
+#[allow(async_fn_in_trait)]
+pub trait AS5600AsyncInterface {
+    type Error;
+
+    async fn read_raw_angle(&mut self) -> Result<u16, AS56Error<Self::Error>>;
+    async fn read_angle(&mut self) -> Result<u16, AS56Error<Self::Error>>;
+    async fn get_config(&mut self) -> Result<Configuration, AS56Error<Self::Error>>;
+    async fn set_config(&mut self, config: Configuration) -> Result<(), AS56Error<Self::Error>>;
+    async fn get_magnet_status(&mut self) -> Result<MagnetStatus, AS56Error<Self::Error>>;
+    async fn get_status_raw(&mut self) -> Result<u8, AS56Error<Self::Error>>;
+    async fn get_agc(&mut self) -> Result<u8, AS56Error<Self::Error>>;
+    async fn get_magnitude(&mut self) -> Result<u16, AS56Error<Self::Error>>;
+    async fn get_zero_position(&mut self) -> Result<u16, AS56Error<Self::Error>>;
+    async fn set_zero_position(&mut self, position: u16) -> Result<(), AS56Error<Self::Error>>;
+    async fn get_max_position(&mut self) -> Result<u16, AS56Error<Self::Error>>;
+    async fn set_max_position(&mut self, position: u16) -> Result<(), AS56Error<Self::Error>>;
+    async fn get_max_angle(&mut self) -> Result<u16, AS56Error<Self::Error>>;
+    async fn set_max_angle(&mut self, angle: u16) -> Result<(), AS56Error<Self::Error>>;
+    async fn get_burn_count(&mut self) -> Result<u8, AS56Error<Self::Error>>;
+    async fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS56Error<Self::Error>>;
+}

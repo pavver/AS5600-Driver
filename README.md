@@ -21,8 +21,10 @@ A comprehensive, low-level, platform-agnostic Rust driver for the **AS5600** mag
 - **Hardware Configuration**: Support for Hysteresis, Power Modes, PWM settings, and Fast/Slow Filters.
 - **Diagnostics**: Methods to monitor magnet detection, magnetic field strength, and Automatic Gain Control (AGC).
 - **OTP Programming**: Secure methods for permanent burning of settings (marked `unsafe`).
+- **Asynchronous Support**: Full compatibility with `embedded-hal-async` 1.0 (behind the `async` feature).
+- **Batch Diagnostics**: Optimized transaction to read all sensor data in one go.
 - **Mocking Support**: Built-in hardware emulator for testing and simulation (behind the `mock` feature).
-- **Trait-based Interface**: `AS5600Interface` trait allows easy swapping between real hardware and mocks.
+- **Trait-based Interface**: `AS5600Interface` and `AS5600AsyncInterface` traits allow easy swapping between real hardware and mocks.
 - **Cross-Platform**: Support for Linux (SBCs like Raspberry Pi), ESP32 (std & no_std), and any other platform implementing `embedded-hal`.
 
 ## 📦 Installation
@@ -30,14 +32,15 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Basic no_std version
-AS5600-Driver = "0.1.0"
+AS5600-Driver = "0.1.2"
 
-# Or with std and anyhow support (recommended for ESP32/Linux)
-AS5600-river = { version = "0.1.0", features = ["std", "anyhow"] }
+# Or with async and std support
+AS5600-Driver = { version = "0.1.2", features = ["async", "std", "anyhow"] }
 ```
 
 ### ⚙️ Features
 - `std`: Enables standard library support.
+- `async`: Enables asynchronous support using `embedded-hal-async`.
 - `anyhow`: Enables integration with `anyhow` crate for easier error handling (requires `std`).
 - `mock`: Enables the hardware mock emulator (requires `std`).
 
@@ -53,6 +56,15 @@ let status = encoder.get_magnet_status()?;
 let status_raw = encoder.get_status_raw()?;
 let magnitude = encoder.get_magnitude()?;
 let agc = encoder.get_agc()?;
+
+// OR: Optimized batch reading (reads status, angle, agc, and magnitude in one go)
+/*
+let diag = encoder.read_all_diagnostics()?;
+let status = diag.magnet_status;
+let magnitude = diag.magnitude;
+let agc = diag.agc;
+*/
+
 let burn_count = encoder.get_burn_count()?;
 let conf = encoder.get_config()?;
 
@@ -81,19 +93,18 @@ We provide several ready-to-use examples for different environments:
 - **[ESP32 Dashboard (no_std)](./example/esp-no_std)**: Bare-metal implementation for ESP32 using `esp-hal` (no operating system).
 - **[Linux Dashboard](./example/linux)**: Using the sensor on Linux-based SBCs (Raspberry Pi, etc.) via `/dev/i2c-x`.
 - **[Mock Simulation](./example/mock)**: Hardware-free simulation for testing UI and logic on your PC.
+- **[Async Mock Simulation](./example/async-mock)**: Demonstrates asynchronous usage with `tokio` and `embedded-hal-async`.
 
 ### Quick Start: Decoupled Interface (Traits)
-Using `AS5600Interface` allows your application logic to be independent of the specific I2C implementation.
+Using `AS5600Interface` or `AS5600AsyncInterface` allows your application logic to be independent of the specific I2C implementation.
 
 ```rust
 use AS5600_Driver::AS5600Interface;
 
-// This function works with ANY sensor implementation (Real or Mock)
+// This function works with ANY synchronous sensor implementation (Real or Mock)
 fn run_diagnostic(encoder: &mut impl AS5600Interface) -> anyhow::Result<()> {
-    let raw = encoder.read_raw_angle()?;
-    let status = encoder.get_magnet_status()?;
-    
-    println!("Position: {}, Detected: {}", raw, status.detected);
+    let diag = encoder.read_all_diagnostics()?;
+    println!("Position: {}, Detected: {}", diag.angle, diag.magnet_status.detected);
     Ok(())
 }
 ```

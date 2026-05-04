@@ -67,17 +67,29 @@ fn main() -> ! {
 }
 
 fn render_dashboard(encoder: &mut impl AS5600Interface) -> core::result::Result<(), core::fmt::Error> {
-    // Reading ALL data
+    // --- OPTION 1: Traditional individual reading ---
     let raw = encoder.read_raw_angle().map_err(|_| core::fmt::Error)?;
     let filtered = encoder.read_angle().map_err(|_| core::fmt::Error)?;
     let status = encoder.get_magnet_status().map_err(|_| core::fmt::Error)?;
     let status_raw = encoder.get_status_raw().map_err(|_| core::fmt::Error)?;
     let magnitude = encoder.get_magnitude().map_err(|_| core::fmt::Error)?;
     let agc = encoder.get_agc().map_err(|_| core::fmt::Error)?;
+    
+    // --- OPTION 2: Optimized batch reading (Commented out) ---
+    /*
+    let diag = encoder.read_all_diagnostics().map_err(|_| core::fmt::Error)?;
+    let raw = diag.raw_angle;
+    let filtered = diag.angle;
+    let status = diag.magnet_status;
+    let status_raw = encoder.get_status_raw().map_err(|_| core::fmt::Error)?; // Not in diag struct
+    let magnitude = diag.magnitude;
+    let agc = diag.agc;
+    */
+
     let burn_count = encoder.get_burn_count().map_err(|_| core::fmt::Error)?;
     let conf = encoder.get_config().map_err(|_| core::fmt::Error)?;
     
-    // Limits and Ranges
+    // Read limits and ranges
     let zpos = encoder.get_zero_position().map_err(|_| core::fmt::Error)?;
     let mpos = encoder.get_max_position().map_err(|_| core::fmt::Error)?;
     let mang = encoder.get_max_angle().map_err(|_| core::fmt::Error)?;

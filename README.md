@@ -72,6 +72,7 @@ let fast_str = format!("{:?}", conf.fast_filter_threshold);
 All examples provide a real-time monitoring dashboard as shown below:
 
 ![AS5600 Dashboard Preview](image.png)
+\
 *Typical real-time diagnostic output from the provided examples.*
 
 We provide several ready-to-use examples for different environments:

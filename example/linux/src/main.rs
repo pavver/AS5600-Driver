@@ -36,13 +36,25 @@ where
     I: AS5600Interface,
     I::Error: std::fmt::Debug + Send + Sync + 'static,
 {
-    // Reading ALL data from the sensor
+    // --- OPTION 1: Traditional individual reading ---
     let raw = encoder.read_raw_angle()?;
     let filtered = encoder.read_angle()?;
     let status = encoder.get_magnet_status()?;
     let status_raw = encoder.get_status_raw()?;
     let magnitude = encoder.get_magnitude()?;
     let agc = encoder.get_agc()?;
+    
+    // --- OPTION 2: Optimized batch reading (Commented out) ---
+    /*
+    let diag = encoder.read_all_diagnostics()?;
+    let raw = diag.raw_angle;
+    let filtered = diag.angle;
+    let status = diag.magnet_status;
+    let status_raw = encoder.get_status_raw()?; // Not in diag struct
+    let magnitude = diag.magnitude;
+    let agc = diag.agc;
+    */
+
     let burn_count = encoder.get_burn_count()?;
     let conf = encoder.get_config()?;
     

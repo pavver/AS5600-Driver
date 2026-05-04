@@ -138,3 +138,21 @@ impl Default for Configuration {
         }
     }
 }
+
+/// A comprehensive snapshot of the sensor status and readings.
+///
+/// This structure is used for optimized batch reading of all diagnostic
+/// information in a single I2C transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Diagnostics {
+    /// The current 12-bit angle after all filters.
+    pub angle: u16,
+    /// The 12-bit raw angle directly from the sensors.
+    pub raw_angle: u16,
+    /// Current health status of the magnetic system.
+    pub magnet_status: MagnetStatus,
+    /// Current Automatic Gain Control value (0..255).
+    pub agc: u8,
+    /// Current magnitude of the magnetic field (12-bit).
+    pub magnitude: u16,
+}

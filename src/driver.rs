@@ -44,6 +44,9 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
 
     /// Internal helper to write a 12-bit value to two consecutive registers.
     fn write_u16(&mut self, reg_hi: u8, value: u16) -> Result<(), AS5600Error<I2C::Error>> {
+        if value > regs::ANGLE_MASK {
+            return Err(AS5600Error::InvalidParameter);
+        }
         let bytes = value.to_be_bytes();
         self.i2c
             .write(self.address, &[reg_hi, bytes[0], bytes[1]])
@@ -53,6 +56,10 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
 
     /// **DANGER**: Permanently burns ZPOS and MPOS settings to the chip.
     pub unsafe fn danger_permanent_burn_settings(&mut self) -> Result<(), AS5600Error<I2C::Error>> {
+        let count = self.get_burn_count()?;
+        if count >= 3 {
+            return Err(AS5600Error::OtpMaxBurnsReached);
+        }
         self.i2c
             .write(self.address, &[regs::BURN, regs::BURN_SETTINGS_CMD])
             .map_err(AS5600Error::I2c)?;
@@ -92,6 +99,9 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
 
     /// Internal helper to write a 12-bit value to two consecutive registers (async).
     async fn write_u16_async(&mut self, reg_hi: u8, value: u16) -> Result<(), AS5600Error<I2C::Error>> {
+        if value > regs::ANGLE_MASK {
+            return Err(AS5600Error::InvalidParameter);
+        }
         let bytes = value.to_be_bytes();
         self.i2c
             .write(self.address, &[reg_hi, bytes[0], bytes[1]])

@@ -549,6 +549,25 @@ mod tests {
     }
 
     #[test]
+    fn test_i2c_error_handling() {
+        let mock = AS5600Mock::new();
+        let mut driver = AS5600Driver::new(mock.clone());
+        
+        // Everything OK
+        assert!(driver.read_raw_angle().is_ok());
+
+        // Simulate I2C failure
+        mock.mock_set_error(Some(crate::mock::MockError::I2cError));
+        let result = driver.read_raw_angle();
+        
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AS5600Error::I2c(e) => assert_eq!(e, crate::mock::MockError::I2cError),
+            _ => panic!("Expected I2C error"),
+        }
+    }
+
+    #[test]
     fn test_diagnostics() {
         let mock = AS5600Mock::new();
         mock.mock_set_raw_angle(1000);

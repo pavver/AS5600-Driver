@@ -20,6 +20,7 @@ impl embedded_hal::i2c::Error for MockError {
 struct MockState {
     registers: [u8; 256],
     transaction_log: Vec<MockTransaction>,
+    error_state: Option<MockError>,
 }
 
 /// Represents a single I2C transaction recorded by the mock.
@@ -59,8 +60,15 @@ impl AS5600Mock {
             state: Arc::new(Mutex::new(MockState { 
                 registers,
                 transaction_log: Vec::new(),
+                error_state: None,
             })),
         }
+    }
+
+    /// Forces the mock to return an error on all subsequent I2C operations.
+    pub fn mock_set_error(&self, error: Option<MockError>) {
+        let mut state = self.state.lock().unwrap();
+        state.error_state = error;
     }
 
     /// Returns the recorded transaction log and clears it.
@@ -122,6 +130,10 @@ impl embedded_hal::i2c::ErrorType for AS5600Mock {
 
 impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
     fn read(&mut self, _address: u8, _read: &mut [u8]) -> Result<(), Self::Error> {
+        let state = self.state.lock().unwrap();
+        if let Some(err) = state.error_state {
+            return Err(err);
+        }
         // Simple read from the last register is not fully implemented in this mock
         // as the AS5600 driver always uses write_read for register access.
         Ok(())
@@ -129,6 +141,9 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
 
     fn write(&mut self, _address: u8, write: &[u8]) -> Result<(), Self::Error> {
         let mut state = self.state.lock().unwrap();
+        if let Some(err) = state.error_state {
+            return Err(err);
+        }
         if !write.is_empty() {
             state.transaction_log.push(MockTransaction::Write(write[0], write[1..].to_vec()));
         }
@@ -150,6 +165,9 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
         read: &mut [u8],
     ) -> Result<(), Self::Error> {
         let mut state = self.state.lock().unwrap();
+        if let Some(err) = state.error_state {
+            return Err(err);
+        }
         if !write.is_empty() {
             state.transaction_log.push(MockTransaction::WriteRead(write[0], read.len()));
         }

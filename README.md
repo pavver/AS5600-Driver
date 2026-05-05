@@ -23,7 +23,9 @@ A comprehensive, low-level, platform-agnostic Rust driver for the **AS5600** mag
 - **OTP Programming**: Secure methods for permanent burning of settings (marked `unsafe`).
 - **Asynchronous Support**: Full compatibility with `embedded-hal-async` 1.0 (behind the `async` feature).
 - **Batch Diagnostics**: Optimized transaction to read all sensor data in one go.
-- **Mocking Support**: Built-in hardware emulator for testing and simulation (behind the `mock` feature).
+- **Mocking Support**: Built-in hardware emulator for testing and simulation, including I2C bus failure simulation (behind the `mock` feature).
+- **defmt Support**: High-efficiency logging for embedded systems (behind the `defmt` feature).
+- **Smart Configuration**: Builder pattern with intelligent Read-Modify-Write logic to preserve unedited settings.
 - **Trait-based Interface**: `AS5600Interface` and `AS5600AsyncInterface` traits allow easy swapping between real hardware and mocks.
 - **Cross-Platform**: Support for Linux (SBCs like Raspberry Pi), ESP32 (std & no_std), and any other platform implementing `embedded-hal`.
 
@@ -43,6 +45,7 @@ AS5600-Driver = { version = "0.1.2", features = ["async", "std", "anyhow"] }
 - `async`: Enables asynchronous support using `embedded-hal-async`.
 - `anyhow`: Enables integration with `anyhow` crate for easier error handling (requires `std`).
 - `mock`: Enables the hardware mock emulator (requires `std`).
+- `defmt`: Enables `defmt::Format` implementation for all public structures.
 
 ## 🛠 Usage Examples
 
@@ -94,6 +97,20 @@ We provide several ready-to-use examples for different environments:
 - **[Linux Dashboard](./example/linux)**: Using the sensor on Linux-based SBCs (Raspberry Pi, etc.) via `/dev/i2c-x`.
 - **[Mock Simulation](./example/mock)**: Hardware-free simulation for testing UI and logic on your PC.
 - **[Async Mock Simulation](./example/async-mock)**: Demonstrates asynchronous usage with `tokio` and `embedded-hal-async`.
+
+### Smart Configuration (Builder Pattern)
+The driver features a "smart" configuration system that minimizes I2C traffic and prevents accidental overwriting of settings. Using the `apply_config` method with a `ConfigurationBuilder`, only the registers containing modified fields are accessed. 
+
+If a register needs partial update, the driver performs a Read-Modify-Write cycle; if all fields in a register are set, it performs a direct Write.
+
+```rust
+// Only changes watchdog and power mode, preserving other settings
+encoder.apply_config(
+    Configuration::builder()
+        .watchdog(false)
+        .power_mode(PowerMode::LPM1)
+)?;
+```
 
 ### Quick Start: Decoupled Interface (Traits)
 Using `AS5600Interface` or `AS5600AsyncInterface` allows your application logic to be independent of the specific I2C implementation.

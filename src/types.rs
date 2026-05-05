@@ -126,6 +126,11 @@ pub struct Configuration {
 }
 
 impl Configuration {
+    /// Returns a new configuration builder.
+    pub fn builder() -> ConfigurationBuilder {
+        ConfigurationBuilder::default()
+    }
+
     /// Creates a configuration from the raw CONF_HI and CONF_LO register bytes.
     pub fn from_bytes(hi: u8, lo: u8) -> Self {
         use crate::regs::regs::*;
@@ -185,6 +190,76 @@ impl Configuration {
             | (self.power_mode as u8);
 
         (hi, lo)
+    }
+}
+
+/// A builder for the [`Configuration`] struct.
+///
+/// Use this to easily construct a configuration by changing only the fields you need.
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigurationBuilder {
+    config: Configuration,
+}
+
+impl ConfigurationBuilder {
+    /// Creates a new builder with default sensor settings.
+    pub fn new() -> Self {
+        Self {
+            config: Configuration::default(),
+        }
+    }
+
+    /// Sets the power consumption mode.
+    pub fn power_mode(mut self, mode: PowerMode) -> Self {
+        self.config.power_mode = mode;
+        self
+    }
+
+    /// Sets the hysteresis level.
+    pub fn hysteresis(mut self, hysteresis: Hysteresis) -> Self {
+        self.config.hysteresis = hysteresis;
+        self
+    }
+
+    /// Sets the output pin functionality.
+    pub fn output_stage(mut self, output_stage: OutputStage) -> Self {
+        self.config.output_stage = output_stage;
+        self
+    }
+
+    /// Sets the PWM signal frequency.
+    pub fn pwm_frequency(mut self, frequency: PwmFrequency) -> Self {
+        self.config.pwm_frequency = frequency;
+        self
+    }
+
+    /// Sets the slow filter averaging factor.
+    pub fn slow_filter(mut self, filter: SlowFilter) -> Self {
+        self.config.slow_filter = filter;
+        self
+    }
+
+    /// Sets the fast filter threshold.
+    pub fn fast_filter_threshold(mut self, threshold: FastFilterThreshold) -> Self {
+        self.config.fast_filter_threshold = threshold;
+        self
+    }
+
+    /// Enables or disables the watchdog timer.
+    pub fn watchdog(mut self, enabled: bool) -> Self {
+        self.config.watchdog = enabled;
+        self
+    }
+
+    /// Returns the finalized [`Configuration`].
+    pub fn build(self) -> Configuration {
+        self.config
+    }
+}
+
+impl Default for ConfigurationBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

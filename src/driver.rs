@@ -349,6 +349,21 @@ mod tests {
     }
 
     #[test]
+    fn test_config_builder() {
+        let config = Configuration::builder()
+            .power_mode(PowerMode::LPM3)
+            .watchdog(false)
+            .hysteresis(Hysteresis::Off)
+            .build();
+        
+        assert_eq!(config.power_mode, PowerMode::LPM3);
+        assert_eq!(config.watchdog, false);
+        assert_eq!(config.hysteresis, Hysteresis::Off);
+        // Default values for other fields
+        assert_eq!(config.slow_filter, SlowFilter::X16);
+    }
+
+    #[test]
     fn test_config_read_write() {
         let mock = AS5600Mock::new();
         let mut driver = AS5600Driver::new(mock);

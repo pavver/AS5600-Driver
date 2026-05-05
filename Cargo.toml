@@ -21,11 +21,14 @@ anyhow = ["dep:anyhow", "std"]
 mock = ["std"]
 # Enables asynchronous support using embedded-hal-async
 async = ["dep:embedded-hal-async"]
+# Enables defmt support for logging
+defmt = ["dep:defmt"]
 
 [dependencies]
 embedded-hal = "1.0"
 embedded-hal-async = { version = "1.0", optional = true }
 anyhow = { version = "1.0", optional = true }
+defmt = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }

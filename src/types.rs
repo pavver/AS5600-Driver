@@ -4,6 +4,7 @@ use crate::regs::regs::*;
 ///
 /// Lower power modes reduce current consumption by increasing the sampling interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PowerMode {
     /// No power saving, continuous sampling. (Current: ~6.5mA)
     Nominal = 0b00,
@@ -19,6 +20,7 @@ pub enum PowerMode {
 ///
 /// Defines the number of LSBs the position must change before the output is updated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Hysteresis {
     /// No hysteresis.
     Off = 0b00,
@@ -32,6 +34,7 @@ pub enum Hysteresis {
 
 /// Output stage configuration for the OUT pin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum OutputStage {
     /// Ratiometric analog output (0V to VDD).
     AnalogFull = 0b00,
@@ -43,6 +46,7 @@ pub enum OutputStage {
 
 /// PWM signal frequency when using PWM output stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PwmFrequency {
     /// 115 Hz PWM frequency.
     Hz115 = 0b00,
@@ -58,6 +62,7 @@ pub enum PwmFrequency {
 ///
 /// Higher values mean more averaging and less noise, but higher step response time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SlowFilter {
     /// 16x averaging.
     X16 = 0b00,
@@ -74,6 +79,7 @@ pub enum SlowFilter {
 /// If the position change exceeds this threshold, the slow filter is bypassed
 /// to provide a fast response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FastFilterThreshold {
     /// Fast filter disabled, only slow filter is used.
     SlowOnly = 0b000,
@@ -97,6 +103,7 @@ pub enum FastFilterThreshold {
 ///
 /// Provides information about magnet detection and field strength.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MagnetStatus {
     /// True if a magnet is detected by the Hall sensors.
     pub detected: bool,
@@ -110,6 +117,7 @@ pub struct MagnetStatus {
 ///
 /// This struct maps to the CONF_HI and CONF_LO registers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Configuration {
     pub power_mode: PowerMode,
     pub hysteresis: Hysteresis,
@@ -184,6 +192,7 @@ impl Configuration {
 
 /// A builder for the [`Configuration`] struct that tracks which fields were changed.
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ConfigurationBuilder {
     pub(crate) power_mode: Option<PowerMode>,
     pub(crate) hysteresis: Option<Hysteresis>,
@@ -284,6 +293,7 @@ impl Default for Configuration {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Diagnostics {
     pub angle: u16,
     pub raw_angle: u16,

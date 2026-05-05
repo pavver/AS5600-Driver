@@ -1,7 +1,7 @@
+use crate::error::AS5600Error;
 use crate::regs::*;
 use crate::traits::AS5600Interface;
 use crate::types::*;
-use crate::error::AS5600Error;
 use embedded_hal::i2c::{I2c, SevenBitAddress};
 
 /// Main driver for the AS5600 sensor.
@@ -98,7 +98,11 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
     }
 
     /// Internal helper to write a 12-bit value to two consecutive registers (async).
-    async fn write_u16_async(&mut self, reg_hi: u8, value: u16) -> Result<(), AS5600Error<I2C::Error>> {
+    async fn write_u16_async(
+        &mut self,
+        reg_hi: u8,
+        value: u16,
+    ) -> Result<(), AS5600Error<I2C::Error>> {
         if value > regs::ANGLE_MASK {
             return Err(AS5600Error::InvalidParameter);
         }
@@ -168,13 +172,19 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         Ok(())
     }
 
-    async fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>> {
+    async fn apply_config(
+        &mut self,
+        builder: ConfigurationBuilder,
+    ) -> Result<(), AS5600Error<Self::Error>> {
         // --- Handle CONF_HI (WD, FTH, SF) ---
         if builder.is_hi_dirty() {
             let hi_val = if builder.is_hi_complete() {
                 let d = Configuration::default(); // Used just for bit layout
                 ((builder.watchdog.unwrap_or(d.watchdog) as u8) << 5)
-                    | ((builder.fast_filter_threshold.unwrap_or(d.fast_filter_threshold) as u8) << 2)
+                    | ((builder
+                        .fast_filter_threshold
+                        .unwrap_or(d.fast_filter_threshold) as u8)
+                        << 2)
                     | (builder.slow_filter.unwrap_or(d.slow_filter) as u8)
             } else {
                 // Read-Modify-Write
@@ -190,7 +200,10 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
                 }
                 current
             };
-            self.i2c.write(self.address, &[regs::CONF_HI, hi_val]).await.map_err(AS5600Error::I2c)?;
+            self.i2c
+                .write(self.address, &[regs::CONF_HI, hi_val])
+                .await
+                .map_err(AS5600Error::I2c)?;
         }
 
         // --- Handle CONF_LO (PWMF, OUTS, HYST, PM) ---
@@ -218,7 +231,10 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
                 }
                 current
             };
-            self.i2c.write(self.address, &[regs::CONF_LO, lo_val]).await.map_err(AS5600Error::I2c)?;
+            self.i2c
+                .write(self.address, &[regs::CONF_LO, lo_val])
+                .await
+                .map_err(AS5600Error::I2c)?;
         }
 
         Ok(())
@@ -229,7 +245,8 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
     }
 
     async fn set_zero_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16_async(regs::ZPOS_HI, angle & regs::ZPOS_MASK).await
+        self.write_u16_async(regs::ZPOS_HI, angle & regs::ZPOS_MASK)
+            .await
     }
 
     async fn get_max_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
@@ -237,7 +254,8 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
     }
 
     async fn set_max_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16_async(regs::MPOS_HI, angle & regs::MPOS_MASK).await
+        self.write_u16_async(regs::MPOS_HI, angle & regs::MPOS_MASK)
+            .await
     }
 
     async fn get_max_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
@@ -245,7 +263,8 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
     }
 
     async fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16_async(regs::MANG_HI, angle & regs::MANG_MASK).await
+        self.write_u16_async(regs::MANG_HI, angle & regs::MANG_MASK)
+            .await
     }
 
     async fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
@@ -327,13 +346,19 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
         Ok(())
     }
 
-    fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>> {
+    fn apply_config(
+        &mut self,
+        builder: ConfigurationBuilder,
+    ) -> Result<(), AS5600Error<Self::Error>> {
         // --- Handle CONF_HI (WD, FTH, SF) ---
         if builder.is_hi_dirty() {
             let hi_val = if builder.is_hi_complete() {
                 let d = Configuration::default();
                 ((builder.watchdog.unwrap_or(d.watchdog) as u8) << 5)
-                    | ((builder.fast_filter_threshold.unwrap_or(d.fast_filter_threshold) as u8) << 2)
+                    | ((builder
+                        .fast_filter_threshold
+                        .unwrap_or(d.fast_filter_threshold) as u8)
+                        << 2)
                     | (builder.slow_filter.unwrap_or(d.slow_filter) as u8)
             } else {
                 let mut current = self.read_u8(regs::CONF_HI)?;
@@ -348,7 +373,9 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
                 }
                 current
             };
-            self.i2c.write(self.address, &[regs::CONF_HI, hi_val]).map_err(AS5600Error::I2c)?;
+            self.i2c
+                .write(self.address, &[regs::CONF_HI, hi_val])
+                .map_err(AS5600Error::I2c)?;
         }
 
         // --- Handle CONF_LO (PWMF, OUTS, HYST, PM) ---
@@ -375,7 +402,9 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
                 }
                 current
             };
-            self.i2c.write(self.address, &[regs::CONF_LO, lo_val]).map_err(AS5600Error::I2c)?;
+            self.i2c
+                .write(self.address, &[regs::CONF_LO, lo_val])
+                .map_err(AS5600Error::I2c)?;
         }
 
         Ok(())
@@ -475,7 +504,7 @@ mod tests {
             .watchdog(false)
             .hysteresis(Hysteresis::Off)
             .build();
-        
+
         assert_eq!(config.power_mode, PowerMode::LPM3);
         assert_eq!(config.watchdog, false);
         assert_eq!(config.hysteresis, Hysteresis::Off);
@@ -492,20 +521,28 @@ mod tests {
         // --- Case 1: Partial update (only one field in CONF_HI) ---
         // Expect: 1 WriteRead (to get current) + 1 Write (to update)
         mock.mock_clear_log();
-        driver.apply_config(Configuration::builder().watchdog(false)).unwrap();
+        driver
+            .apply_config(Configuration::builder().watchdog(false))
+            .unwrap();
         let log = mock.mock_get_log();
         assert_eq!(log.len(), 2);
-        assert!(matches!(log[0], MockTransaction::WriteRead(regs::CONF_HI, 1)));
+        assert!(matches!(
+            log[0],
+            MockTransaction::WriteRead(regs::CONF_HI, 1)
+        ));
         assert!(matches!(log[1], MockTransaction::Write(regs::CONF_HI, _)));
 
         // --- Case 2: Complete update of one register (all fields in CONF_HI) ---
         // Expect: Only 1 Write (no Read needed)
         mock.mock_clear_log();
-        driver.apply_config(Configuration::builder()
-            .watchdog(true)
-            .fast_filter_threshold(FastFilterThreshold::Lsb6)
-            .slow_filter(SlowFilter::X2)
-        ).unwrap();
+        driver
+            .apply_config(
+                Configuration::builder()
+                    .watchdog(true)
+                    .fast_filter_threshold(FastFilterThreshold::Lsb6)
+                    .slow_filter(SlowFilter::X2),
+            )
+            .unwrap();
         let log = mock.mock_get_log();
         assert_eq!(log.len(), 1);
         assert!(matches!(log[0], MockTransaction::Write(regs::CONF_HI, _)));
@@ -513,14 +550,17 @@ mod tests {
         // --- Case 3: Update fields in different registers (CONF_HI and CONF_LO) ---
         // Expect: Operations for both registers
         mock.mock_clear_log();
-        driver.apply_config(Configuration::builder()
-            .watchdog(true)
-            .power_mode(PowerMode::LPM1)
-        ).unwrap();
+        driver
+            .apply_config(
+                Configuration::builder()
+                    .watchdog(true)
+                    .power_mode(PowerMode::LPM1),
+            )
+            .unwrap();
         let log = mock.mock_get_log();
         // 2 registers * (Read + Write) = 4 operations
         assert_eq!(log.len(), 4);
-        
+
         // --- Case 4: No changes ---
         // Expect: 0 operations
         mock.mock_clear_log();
@@ -532,7 +572,7 @@ mod tests {
     fn test_config_read_write() {
         let mock = AS5600Mock::new();
         let mut driver = AS5600Driver::new(mock);
-        
+
         let config = Configuration {
             power_mode: PowerMode::LPM2,
             hysteresis: Hysteresis::Lsb3,
@@ -552,14 +592,14 @@ mod tests {
     fn test_i2c_error_handling() {
         let mock = AS5600Mock::new();
         let mut driver = AS5600Driver::new(mock.clone());
-        
+
         // Everything OK
         assert!(driver.read_raw_angle().is_ok());
 
         // Simulate I2C failure
         mock.mock_set_error(Some(crate::mock::MockError::I2cError));
         let result = driver.read_raw_angle();
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AS5600Error::I2c(e) => assert_eq!(e, crate::mock::MockError::I2cError),
@@ -598,7 +638,12 @@ mod tests {
             let mock = AS5600Mock::new();
             mock.mock_set_raw_angle(2500);
             let mut driver = AS5600Driver::new(mock);
-            assert_eq!(AS5600AsyncInterface::read_raw_angle(&mut driver).await.unwrap(), 2500);
+            assert_eq!(
+                AS5600AsyncInterface::read_raw_angle(&mut driver)
+                    .await
+                    .unwrap(),
+                2500
+            );
         }
 
         #[tokio::test]
@@ -606,7 +651,9 @@ mod tests {
             let mock = AS5600Mock::new();
             let mut driver = AS5600Driver::new(mock);
             let config = Configuration::default();
-            AS5600AsyncInterface::set_config(&mut driver, config).await.unwrap();
+            AS5600AsyncInterface::set_config(&mut driver, config)
+                .await
+                .unwrap();
             let read_config = AS5600AsyncInterface::get_config(&mut driver).await.unwrap();
             assert_eq!(read_config, config);
         }
@@ -616,7 +663,9 @@ mod tests {
             let mock = AS5600Mock::new();
             mock.mock_set_raw_angle(3000);
             let mut driver = AS5600Driver::new(mock);
-            let diag = AS5600AsyncInterface::read_all_diagnostics(&mut driver).await.unwrap();
+            let diag = AS5600AsyncInterface::read_all_diagnostics(&mut driver)
+                .await
+                .unwrap();
             assert_eq!(diag.raw_angle, 3000);
         }
     }

@@ -47,9 +47,9 @@ pub mod mock;
 pub use driver::AS5600Driver;
 pub use error::AS5600Error;
 pub use regs::*;
-pub use traits::AS5600Interface;
 #[cfg(feature = "async")]
 pub use traits::AS5600AsyncInterface;
+pub use traits::AS5600Interface;
 pub use types::*;
 
 #[cfg(feature = "mock")]

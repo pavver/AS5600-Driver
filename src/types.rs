@@ -263,22 +263,32 @@ impl ConfigurationBuilder {
 
     /// Checks if any field in the CONF_HI register (WD, FTH, SF) was modified.
     pub fn is_hi_dirty(&self) -> bool {
-        self.watchdog.is_some() || self.fast_filter_threshold.is_some() || self.slow_filter.is_some()
+        self.watchdog.is_some()
+            || self.fast_filter_threshold.is_some()
+            || self.slow_filter.is_some()
     }
 
     /// Checks if all fields in the CONF_HI register were modified (allowing direct write).
     pub fn is_hi_complete(&self) -> bool {
-        self.watchdog.is_some() && self.fast_filter_threshold.is_some() && self.slow_filter.is_some()
+        self.watchdog.is_some()
+            && self.fast_filter_threshold.is_some()
+            && self.slow_filter.is_some()
     }
 
     /// Checks if any field in the CONF_LO register (PWMF, OUTS, HYST, PM) was modified.
     pub fn is_lo_dirty(&self) -> bool {
-        self.pwm_frequency.is_some() || self.output_stage.is_some() || self.hysteresis.is_some() || self.power_mode.is_some()
+        self.pwm_frequency.is_some()
+            || self.output_stage.is_some()
+            || self.hysteresis.is_some()
+            || self.power_mode.is_some()
     }
 
     /// Checks if all fields in the CONF_LO register were modified (allowing direct write).
     pub fn is_lo_complete(&self) -> bool {
-        self.pwm_frequency.is_some() && self.output_stage.is_some() && self.hysteresis.is_some() && self.power_mode.is_some()
+        self.pwm_frequency.is_some()
+            && self.output_stage.is_some()
+            && self.hysteresis.is_some()
+            && self.power_mode.is_some()
     }
 
     /// Builds a full configuration using default values for unset fields.
@@ -290,7 +300,9 @@ impl ConfigurationBuilder {
             output_stage: self.output_stage.unwrap_or(d.output_stage),
             pwm_frequency: self.pwm_frequency.unwrap_or(d.pwm_frequency),
             slow_filter: self.slow_filter.unwrap_or(d.slow_filter),
-            fast_filter_threshold: self.fast_filter_threshold.unwrap_or(d.fast_filter_threshold),
+            fast_filter_threshold: self
+                .fast_filter_threshold
+                .unwrap_or(d.fast_filter_threshold),
             watchdog: self.watchdog.unwrap_or(d.watchdog),
         }
     }

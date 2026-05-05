@@ -57,7 +57,7 @@ impl AS5600Mock {
         registers[regs::CONF_HI as usize] = regs::CONF_WD_MASK; // Watchdog ON
 
         Self {
-            state: Arc::new(Mutex::new(MockState { 
+            state: Arc::new(Mutex::new(MockState {
                 registers,
                 transaction_log: Vec::new(),
                 error_state: None,
@@ -145,7 +145,9 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
             return Err(err);
         }
         if !write.is_empty() {
-            state.transaction_log.push(MockTransaction::Write(write[0], write[1..].to_vec()));
+            state
+                .transaction_log
+                .push(MockTransaction::Write(write[0], write[1..].to_vec()));
         }
         if write.len() >= 2 {
             let reg = write[0] as usize;
@@ -169,7 +171,9 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
             return Err(err);
         }
         if !write.is_empty() {
-            state.transaction_log.push(MockTransaction::WriteRead(write[0], read.len()));
+            state
+                .transaction_log
+                .push(MockTransaction::WriteRead(write[0], read.len()));
         }
         let reg = write[0] as usize;
         for i in 0..read.len() {

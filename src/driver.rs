@@ -484,6 +484,51 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_config_smart_logic() {
+        use crate::mock::MockTransaction;
+        let mock = AS5600Mock::new();
+        let mut driver = AS5600Driver::new(mock.clone());
+
+        // --- Case 1: Partial update (only one field in CONF_HI) ---
+        // Expect: 1 WriteRead (to get current) + 1 Write (to update)
+        mock.mock_clear_log();
+        driver.apply_config(Configuration::builder().watchdog(false)).unwrap();
+        let log = mock.mock_get_log();
+        assert_eq!(log.len(), 2);
+        assert!(matches!(log[0], MockTransaction::WriteRead(regs::CONF_HI, 1)));
+        assert!(matches!(log[1], MockTransaction::Write(regs::CONF_HI, _)));
+
+        // --- Case 2: Complete update of one register (all fields in CONF_HI) ---
+        // Expect: Only 1 Write (no Read needed)
+        mock.mock_clear_log();
+        driver.apply_config(Configuration::builder()
+            .watchdog(true)
+            .fast_filter_threshold(FastFilterThreshold::Lsb6)
+            .slow_filter(SlowFilter::X2)
+        ).unwrap();
+        let log = mock.mock_get_log();
+        assert_eq!(log.len(), 1);
+        assert!(matches!(log[0], MockTransaction::Write(regs::CONF_HI, _)));
+
+        // --- Case 3: Update fields in different registers (CONF_HI and CONF_LO) ---
+        // Expect: Operations for both registers
+        mock.mock_clear_log();
+        driver.apply_config(Configuration::builder()
+            .watchdog(true)
+            .power_mode(PowerMode::LPM1)
+        ).unwrap();
+        let log = mock.mock_get_log();
+        // 2 registers * (Read + Write) = 4 operations
+        assert_eq!(log.len(), 4);
+        
+        // --- Case 4: No changes ---
+        // Expect: 0 operations
+        mock.mock_clear_log();
+        driver.apply_config(Configuration::builder()).unwrap();
+        assert_eq!(mock.mock_get_log().len(), 0);
+    }
+
+    #[test]
     fn test_config_read_write() {
         let mock = AS5600Mock::new();
         let mut driver = AS5600Driver::new(mock);

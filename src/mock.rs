@@ -1,6 +1,7 @@
 use crate::regs::*;
 use crate::types::*;
 use std::sync::{Arc, Mutex};
+use std::vec::Vec;
 
 /// Errors that can occur when using the mock driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +19,16 @@ impl embedded_hal::i2c::Error for MockError {
 /// Internal state shared between the mock I2C implementation and the controller.
 struct MockState {
     registers: [u8; 256],
+    transaction_log: Vec<MockTransaction>,
+}
+
+/// Represents a single I2C transaction recorded by the mock.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MockTransaction {
+    /// A write operation: (register, data)
+    Write(u8, Vec<u8>),
+    /// A write-read operation (typical for register reading): (register, bytes_read)
+    WriteRead(u8, usize),
 }
 
 /// A mock I2C device that emulates AS5600 behavior.
@@ -26,7 +37,7 @@ struct MockState {
 /// It implements `embedded-hal` I2C traits, so it can be passed to the `AS5600Driver`.
 ///
 /// It also provides a "backdoor" API (`mock_set_*` methods) to change sensor values
-/// from other threads or from your test code.
+/// from other threads or from your test code, and a way to inspect I2C traffic.
 #[derive(Clone)]
 pub struct AS5600Mock {
     state: Arc<Mutex<MockState>>,
@@ -45,8 +56,23 @@ impl AS5600Mock {
         registers[regs::CONF_HI as usize] = regs::CONF_WD_MASK; // Watchdog ON
 
         Self {
-            state: Arc::new(Mutex::new(MockState { registers })),
+            state: Arc::new(Mutex::new(MockState { 
+                registers,
+                transaction_log: Vec::new(),
+            })),
         }
+    }
+
+    /// Returns the recorded transaction log and clears it.
+    pub fn mock_get_log(&self) -> Vec<MockTransaction> {
+        let mut state = self.state.lock().unwrap();
+        std::mem::take(&mut state.transaction_log)
+    }
+
+    /// Resets the transaction log.
+    pub fn mock_clear_log(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.transaction_log.clear();
     }
 
     // --- Simulation Controller API ---
@@ -103,6 +129,9 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
 
     fn write(&mut self, _address: u8, write: &[u8]) -> Result<(), Self::Error> {
         let mut state = self.state.lock().unwrap();
+        if !write.is_empty() {
+            state.transaction_log.push(MockTransaction::Write(write[0], write[1..].to_vec()));
+        }
         if write.len() >= 2 {
             let reg = write[0] as usize;
             for (i, val) in write.iter().skip(1).enumerate() {
@@ -120,7 +149,10 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
         write: &[u8],
         read: &mut [u8],
     ) -> Result<(), Self::Error> {
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
+        if !write.is_empty() {
+            state.transaction_log.push(MockTransaction::WriteRead(write[0], read.len()));
+        }
         let reg = write[0] as usize;
         for i in 0..read.len() {
             if reg + i < 256 {

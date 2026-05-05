@@ -146,63 +146,11 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
             .write_read(self.address, &[regs::CONF_HI], &mut buf)
             .await
             .map_err(AS56Error::I2c)?;
-        let hi = buf[0];
-        let lo = buf[1];
-
-        Ok(Configuration {
-            power_mode: match lo & regs::CONF_PM_MASK {
-                0b01 => PowerMode::LPM1,
-                0b10 => PowerMode::LPM2,
-                0b11 => PowerMode::LPM3,
-                _ => PowerMode::Nominal,
-            },
-            hysteresis: match (lo & regs::CONF_HYST_MASK) >> 2 {
-                0b01 => Hysteresis::Lsb1,
-                0b10 => Hysteresis::Lsb2,
-                0b11 => Hysteresis::Lsb3,
-                _ => Hysteresis::Off,
-            },
-            output_stage: match (lo & regs::CONF_OUTS_MASK) >> 4 {
-                0b01 => OutputStage::AnalogReduced,
-                0b10 => OutputStage::PWM,
-                _ => OutputStage::AnalogFull,
-            },
-            pwm_frequency: match (lo & regs::CONF_PWMF_MASK) >> 6 {
-                0b01 => PwmFrequency::Hz230,
-                0b10 => PwmFrequency::Hz460,
-                0b11 => PwmFrequency::Hz920,
-                _ => PwmFrequency::Hz115,
-            },
-            slow_filter: match hi & regs::CONF_SF_MASK {
-                0b01 => SlowFilter::X8,
-                0b10 => SlowFilter::X4,
-                0b11 => SlowFilter::X2,
-                _ => SlowFilter::X16,
-            },
-            fast_filter_threshold: match (hi & regs::CONF_FTH_MASK) >> 2 {
-                0b001 => FastFilterThreshold::Lsb6,
-                0b010 => FastFilterThreshold::Lsb7,
-                0b011 => FastFilterThreshold::Lsb9,
-                0b100 => FastFilterThreshold::Lsb18,
-                0b101 => FastFilterThreshold::Lsb21,
-                0b110 => FastFilterThreshold::Lsb24,
-                0b111 => FastFilterThreshold::Lsb10,
-                _ => FastFilterThreshold::SlowOnly,
-            },
-            watchdog: (hi & regs::CONF_WD_MASK) != 0,
-        })
+        Ok(Configuration::from_bytes(buf[0], buf[1]))
     }
 
     async fn set_config(&mut self, config: Configuration) -> Result<(), AS56Error<Self::Error>> {
-        let hi = ((config.watchdog as u8) << 5)
-            | ((config.fast_filter_threshold as u8) << 2)
-            | (config.slow_filter as u8);
-
-        let lo = ((config.pwm_frequency as u8) << 6)
-            | ((config.output_stage as u8) << 4)
-            | ((config.hysteresis as u8) << 2)
-            | (config.power_mode as u8);
-
+        let (hi, lo) = config.to_bytes();
         self.i2c
             .write(self.address, &[regs::CONF_HI, hi, lo])
             .await
@@ -302,63 +250,11 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
         self.i2c
             .write_read(self.address, &[regs::CONF_HI], &mut buf)
             .map_err(AS56Error::I2c)?;
-        let hi = buf[0];
-        let lo = buf[1];
-
-        Ok(Configuration {
-            power_mode: match lo & regs::CONF_PM_MASK {
-                0b01 => PowerMode::LPM1,
-                0b10 => PowerMode::LPM2,
-                0b11 => PowerMode::LPM3,
-                _ => PowerMode::Nominal,
-            },
-            hysteresis: match (lo & regs::CONF_HYST_MASK) >> 2 {
-                0b01 => Hysteresis::Lsb1,
-                0b10 => Hysteresis::Lsb2,
-                0b11 => Hysteresis::Lsb3,
-                _ => Hysteresis::Off,
-            },
-            output_stage: match (lo & regs::CONF_OUTS_MASK) >> 4 {
-                0b01 => OutputStage::AnalogReduced,
-                0b10 => OutputStage::PWM,
-                _ => OutputStage::AnalogFull,
-            },
-            pwm_frequency: match (lo & regs::CONF_PWMF_MASK) >> 6 {
-                0b01 => PwmFrequency::Hz230,
-                0b10 => PwmFrequency::Hz460,
-                0b11 => PwmFrequency::Hz920,
-                _ => PwmFrequency::Hz115,
-            },
-            slow_filter: match hi & regs::CONF_SF_MASK {
-                0b01 => SlowFilter::X8,
-                0b10 => SlowFilter::X4,
-                0b11 => SlowFilter::X2,
-                _ => SlowFilter::X16,
-            },
-            fast_filter_threshold: match (hi & regs::CONF_FTH_MASK) >> 2 {
-                0b001 => FastFilterThreshold::Lsb6,
-                0b010 => FastFilterThreshold::Lsb7,
-                0b011 => FastFilterThreshold::Lsb9,
-                0b100 => FastFilterThreshold::Lsb18,
-                0b101 => FastFilterThreshold::Lsb21,
-                0b110 => FastFilterThreshold::Lsb24,
-                0b111 => FastFilterThreshold::Lsb10,
-                _ => FastFilterThreshold::SlowOnly,
-            },
-            watchdog: (hi & regs::CONF_WD_MASK) != 0,
-        })
+        Ok(Configuration::from_bytes(buf[0], buf[1]))
     }
 
     fn set_config(&mut self, config: Configuration) -> Result<(), AS56Error<Self::Error>> {
-        let hi = ((config.watchdog as u8) << 5)
-            | ((config.fast_filter_threshold as u8) << 2)
-            | (config.slow_filter as u8);
-
-        let lo = ((config.pwm_frequency as u8) << 6)
-            | ((config.output_stage as u8) << 4)
-            | ((config.hysteresis as u8) << 2)
-            | (config.power_mode as u8);
-
+        let (hi, lo) = config.to_bytes();
         self.i2c
             .write(self.address, &[regs::CONF_HI, hi, lo])
             .map_err(AS56Error::I2c)?;
@@ -413,5 +309,116 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
             agc,
             magnitude,
         })
+    }
+}
+
+#[cfg(all(test, feature = "mock"))]
+mod tests {
+    use super::*;
+    use crate::mock::AS56Mock;
+
+    #[test]
+    fn test_read_angle() {
+        let mock = AS56Mock::new();
+        mock.mock_set_raw_angle(1234);
+        let mut driver = AS5600Driver::new(mock);
+        assert_eq!(driver.read_raw_angle().unwrap(), 1234);
+    }
+
+    #[test]
+    fn test_magnet_status() {
+        let mock = AS56Mock::new();
+        let status = MagnetStatus {
+            detected: true,
+            too_weak: false,
+            too_strong: true,
+        };
+        mock.mock_set_status(status);
+        let mut driver = AS5600Driver::new(mock);
+        assert_eq!(driver.get_magnet_status().unwrap(), status);
+    }
+
+    #[test]
+    fn test_agc_magnitude() {
+        let mock = AS56Mock::new();
+        mock.mock_set_agc(150);
+        mock.mock_set_magnitude(2000);
+        let mut driver = AS5600Driver::new(mock);
+        assert_eq!(driver.get_agc().unwrap(), 150);
+        assert_eq!(driver.get_magnitude().unwrap(), 2000);
+    }
+
+    #[test]
+    fn test_config_read_write() {
+        let mock = AS56Mock::new();
+        let mut driver = AS5600Driver::new(mock);
+        
+        let config = Configuration {
+            power_mode: PowerMode::LPM2,
+            hysteresis: Hysteresis::Lsb3,
+            output_stage: OutputStage::PWM,
+            pwm_frequency: PwmFrequency::Hz460,
+            slow_filter: SlowFilter::X2,
+            fast_filter_threshold: FastFilterThreshold::Lsb18,
+            watchdog: false,
+        };
+
+        driver.set_config(config).unwrap();
+        let read_config = driver.get_config().unwrap();
+        assert_eq!(read_config, config);
+    }
+
+    #[test]
+    fn test_diagnostics() {
+        let mock = AS56Mock::new();
+        mock.mock_set_raw_angle(1000);
+        mock.mock_set_agc(50);
+        mock.mock_set_magnitude(3000);
+        mock.mock_set_status(MagnetStatus {
+            detected: true,
+            too_weak: false,
+            too_strong: false,
+        });
+
+        let mut driver = AS5600Driver::new(mock);
+        let diag = driver.read_all_diagnostics().unwrap();
+
+        assert_eq!(diag.raw_angle, 1000);
+        assert_eq!(diag.agc, 50);
+        assert_eq!(diag.magnitude, 3000);
+        assert_eq!(diag.magnet_status.detected, true);
+    }
+
+    #[cfg(feature = "async")]
+    mod async_tests {
+        use super::*;
+        use crate::traits::AS5600AsyncInterface;
+
+        #[tokio::test]
+        async fn test_read_angle_async() {
+            let mock = AS56Mock::new();
+            mock.mock_set_raw_angle(2500);
+            let mut driver = AS5600Driver::new(mock);
+            assert_eq!(AS5600AsyncInterface::read_raw_angle(&mut driver).await.unwrap(), 2500);
+        }
+
+        #[tokio::test]
+        async fn test_config_async() {
+            let mock = AS56Mock::new();
+            let mut driver = AS5600Driver::new(mock);
+            let config = Configuration::default();
+            AS5600AsyncInterface::set_config(&mut driver, config).await.unwrap();
+            let read_config = AS5600AsyncInterface::get_config(&mut driver).await.unwrap();
+            assert_eq!(read_config, config);
+        }
+
+        #[tokio::test]
+        async fn test_diagnostics_async() {
+            let mock = AS56Mock::new();
+            mock.mock_set_raw_angle(3000);
+            let mut driver = AS5600Driver::new(mock);
+            let diag = AS5600AsyncInterface::read_all_diagnostics(&mut driver).await.unwrap();
+            assert_eq!(diag.raw_angle, 3000);
+        }
     }
 }

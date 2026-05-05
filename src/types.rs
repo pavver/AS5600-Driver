@@ -107,7 +107,7 @@ pub struct MagnetStatus {
 /// Full configuration of the AS5600 chip.
 ///
 /// This struct maps to the CONF_HI and CONF_LO registers.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Configuration {
     /// Current power mode.
     pub power_mode: PowerMode,
@@ -123,6 +123,69 @@ pub struct Configuration {
     pub fast_filter_threshold: FastFilterThreshold,
     /// Enable/Disable the watchdog timer (auto-low-power after 1 minute of inactivity).
     pub watchdog: bool,
+}
+
+impl Configuration {
+    /// Creates a configuration from the raw CONF_HI and CONF_LO register bytes.
+    pub fn from_bytes(hi: u8, lo: u8) -> Self {
+        use crate::regs::regs::*;
+        Self {
+            power_mode: match lo & CONF_PM_MASK {
+                0b01 => PowerMode::LPM1,
+                0b10 => PowerMode::LPM2,
+                0b11 => PowerMode::LPM3,
+                _ => PowerMode::Nominal,
+            },
+            hysteresis: match (lo & CONF_HYST_MASK) >> 2 {
+                0b01 => Hysteresis::Lsb1,
+                0b10 => Hysteresis::Lsb2,
+                0b11 => Hysteresis::Lsb3,
+                _ => Hysteresis::Off,
+            },
+            output_stage: match (lo & CONF_OUTS_MASK) >> 4 {
+                0b01 => OutputStage::AnalogReduced,
+                0b10 => OutputStage::PWM,
+                _ => OutputStage::AnalogFull,
+            },
+            pwm_frequency: match (lo & CONF_PWMF_MASK) >> 6 {
+                0b01 => PwmFrequency::Hz230,
+                0b10 => PwmFrequency::Hz460,
+                0b11 => PwmFrequency::Hz920,
+                _ => PwmFrequency::Hz115,
+            },
+            slow_filter: match hi & CONF_SF_MASK {
+                0b01 => SlowFilter::X8,
+                0b10 => SlowFilter::X4,
+                0b11 => SlowFilter::X2,
+                _ => SlowFilter::X16,
+            },
+            fast_filter_threshold: match (hi & CONF_FTH_MASK) >> 2 {
+                0b001 => FastFilterThreshold::Lsb6,
+                0b010 => FastFilterThreshold::Lsb7,
+                0b011 => FastFilterThreshold::Lsb9,
+                0b100 => FastFilterThreshold::Lsb18,
+                0b101 => FastFilterThreshold::Lsb21,
+                0b110 => FastFilterThreshold::Lsb24,
+                0b111 => FastFilterThreshold::Lsb10,
+                _ => FastFilterThreshold::SlowOnly,
+            },
+            watchdog: (hi & CONF_WD_MASK) != 0,
+        }
+    }
+
+    /// Converts the configuration into raw (CONF_HI, CONF_LO) register bytes.
+    pub fn to_bytes(&self) -> (u8, u8) {
+        let hi = ((self.watchdog as u8) << 5)
+            | ((self.fast_filter_threshold as u8) << 2)
+            | (self.slow_filter as u8);
+
+        let lo = ((self.pwm_frequency as u8) << 6)
+            | ((self.output_stage as u8) << 4)
+            | ((self.hysteresis as u8) << 2)
+            | (self.power_mode as u8);
+
+        (hi, lo)
+    }
 }
 
 impl Default for Configuration {

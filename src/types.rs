@@ -119,20 +119,29 @@ pub struct MagnetStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Configuration {
+    /// Current power mode.
     pub power_mode: PowerMode,
+    /// Hysteresis setting.
     pub hysteresis: Hysteresis,
+    /// Output pin functionality.
     pub output_stage: OutputStage,
+    /// Frequency for PWM output.
     pub pwm_frequency: PwmFrequency,
+    /// Slow filter averaging factor.
     pub slow_filter: SlowFilter,
+    /// Threshold for fast filter bypass.
     pub fast_filter_threshold: FastFilterThreshold,
+    /// Enable/Disable the watchdog timer (auto-low-power after 1 minute of inactivity).
     pub watchdog: bool,
 }
 
 impl Configuration {
+    /// Returns a new configuration builder.
     pub fn builder() -> ConfigurationBuilder {
         ConfigurationBuilder::new()
     }
 
+    /// Creates a configuration from the raw CONF_HI and CONF_LO register bytes.
     pub fn from_bytes(hi: u8, lo: u8) -> Self {
         Self {
             power_mode: match lo & CONF_PM_MASK {
@@ -178,6 +187,7 @@ impl Configuration {
         }
     }
 
+    /// Converts the configuration into raw (CONF_HI, CONF_LO) register bytes.
     pub fn to_bytes(&self) -> (u8, u8) {
         let hi = ((self.watchdog as u8) << 5)
             | ((self.fast_filter_threshold as u8) << 2)
@@ -204,40 +214,48 @@ pub struct ConfigurationBuilder {
 }
 
 impl ConfigurationBuilder {
+    /// Creates a new builder with no fields set.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the power consumption mode.
     pub fn power_mode(mut self, mode: PowerMode) -> Self {
         self.power_mode = Some(mode);
         self
     }
 
+    /// Sets the hysteresis level.
     pub fn hysteresis(mut self, hysteresis: Hysteresis) -> Self {
         self.hysteresis = Some(hysteresis);
         self
     }
 
+    /// Sets the output pin functionality.
     pub fn output_stage(mut self, output_stage: OutputStage) -> Self {
         self.output_stage = Some(output_stage);
         self
     }
 
+    /// Sets the PWM signal frequency.
     pub fn pwm_frequency(mut self, frequency: PwmFrequency) -> Self {
         self.pwm_frequency = Some(frequency);
         self
     }
 
+    /// Sets the slow filter averaging factor.
     pub fn slow_filter(mut self, filter: SlowFilter) -> Self {
         self.slow_filter = Some(filter);
         self
     }
 
+    /// Sets the fast filter threshold.
     pub fn fast_filter_threshold(mut self, threshold: FastFilterThreshold) -> Self {
         self.fast_filter_threshold = Some(threshold);
         self
     }
 
+    /// Enables or disables the watchdog timer.
     pub fn watchdog(mut self, enabled: bool) -> Self {
         self.watchdog = Some(enabled);
         self
@@ -292,12 +310,21 @@ impl Default for Configuration {
     }
 }
 
+/// A comprehensive snapshot of the sensor status and readings.
+///
+/// This structure is used for optimized batch reading of all diagnostic
+/// information in a single I2C transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Diagnostics {
+    /// The current 12-bit angle after all filters.
     pub angle: u16,
+    /// The 12-bit raw angle directly from the sensors.
     pub raw_angle: u16,
+    /// Current health status of the magnetic system.
     pub magnet_status: MagnetStatus,
+    /// Current Automatic Gain Control value (0..255).
     pub agc: u8,
+    /// Current magnitude of the magnetic field (12-bit).
     pub magnitude: u16,
 }

@@ -45,7 +45,7 @@ pub mod mock;
 
 // Re-exports for convenience
 pub use driver::AS5600Driver;
-pub use error::AS56Error;
+pub use error::AS5600Error;
 pub use regs::*;
 pub use traits::AS5600Interface;
 #[cfg(feature = "async")]
@@ -53,4 +53,4 @@ pub use traits::AS5600AsyncInterface;
 pub use types::*;
 
 #[cfg(feature = "mock")]
-pub use mock::AS56Mock;
+pub use mock::AS5600Mock;

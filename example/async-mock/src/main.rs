@@ -3,7 +3,7 @@ use tokio::time::sleep;
 
 // Import all necessary items from the driver, including the Mock
 use AS5600_Driver::{
-    AS5600Driver, AS5600AsyncInterface, AS56Mock, 
+    AS5600Driver, AS5600AsyncInterface, AS5600Mock, 
     Configuration, PowerMode, Hysteresis, OutputStage, 
     PwmFrequency, SlowFilter, FastFilterThreshold, MagnetStatus
 };
@@ -11,7 +11,7 @@ use AS5600_Driver::{
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // In mock mode, we initialize the virtual device
-    let mock_i2c = AS56Mock::new();
+    let mock_i2c = AS5600Mock::new();
     let mut encoder = AS5600Driver::new(mock_i2c.clone());
 
     println!("🚀 Starting AS5600 Async Simulation mode...");

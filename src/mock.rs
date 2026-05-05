@@ -28,11 +28,11 @@ struct MockState {
 /// It also provides a "backdoor" API (`mock_set_*` methods) to change sensor values
 /// from other threads or from your test code.
 #[derive(Clone)]
-pub struct AS56Mock {
+pub struct AS5600Mock {
     state: Arc<Mutex<MockState>>,
 }
 
-impl AS56Mock {
+impl AS5600Mock {
     /// Creates a new mock with a healthy default state.
     /// - Magnet detected
     /// - AGC at 100
@@ -90,11 +90,11 @@ impl AS56Mock {
     }
 }
 
-impl embedded_hal::i2c::ErrorType for AS56Mock {
+impl embedded_hal::i2c::ErrorType for AS5600Mock {
     type Error = MockError;
 }
 
-impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS56Mock {
+impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
     fn read(&mut self, _address: u8, _read: &mut [u8]) -> Result<(), Self::Error> {
         // Simple read from the last register is not fully implemented in this mock
         // as the AS5600 driver always uses write_read for register access.
@@ -140,7 +140,7 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS56Mock {
 }
 
 #[cfg(feature = "async")]
-impl embedded_hal_async::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS56Mock {
+impl embedded_hal_async::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
     async fn read(&mut self, address: u8, read: &mut [u8]) -> Result<(), Self::Error> {
         embedded_hal::i2c::I2c::read(self, address, read)
     }

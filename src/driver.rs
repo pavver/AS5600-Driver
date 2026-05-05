@@ -245,8 +245,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
     }
 
     async fn set_zero_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16_async(regs::ZPOS_HI, angle & regs::ZPOS_MASK)
-            .await
+        self.write_u16_async(regs::ZPOS_HI, angle).await
     }
 
     async fn get_max_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
@@ -254,8 +253,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
     }
 
     async fn set_max_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16_async(regs::MPOS_HI, angle & regs::MPOS_MASK)
-            .await
+        self.write_u16_async(regs::MPOS_HI, angle).await
     }
 
     async fn get_max_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
@@ -263,8 +261,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
     }
 
     async fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16_async(regs::MANG_HI, angle & regs::MANG_MASK)
-            .await
+        self.write_u16_async(regs::MANG_HI, angle).await
     }
 
     async fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
@@ -415,7 +412,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn set_zero_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16(regs::ZPOS_HI, angle & regs::ZPOS_MASK)
+        self.write_u16(regs::ZPOS_HI, angle)
     }
 
     fn get_max_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
@@ -423,7 +420,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn set_max_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16(regs::MPOS_HI, angle & regs::MPOS_MASK)
+        self.write_u16(regs::MPOS_HI, angle)
     }
 
     fn get_max_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
@@ -431,7 +428,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     }
 
     fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-        self.write_u16(regs::MANG_HI, angle & regs::MANG_MASK)
+        self.write_u16(regs::MANG_HI, angle)
     }
 
     fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
@@ -464,7 +461,8 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
 #[cfg(all(test, feature = "mock"))]
 mod tests {
     use super::*;
-    use crate::mock::AS5600Mock;
+    use crate::mock::{AS5600Mock, MockTransaction};
+    use std::vec;
 
     #[test]
     fn test_read_angle() {
@@ -495,6 +493,51 @@ mod tests {
         let mut driver = AS5600Driver::new(mock);
         assert_eq!(driver.get_agc().unwrap(), 150);
         assert_eq!(driver.get_magnitude().unwrap(), 2000);
+    }
+
+    #[test]
+    fn test_invalid_parameter_validation() {
+        let mock = AS5600Mock::new();
+        let mut driver = AS5600Driver::new(mock);
+
+        // Value 4096 is out of 12-bit range (0..4095)
+        let result = driver.set_zero_position(4096);
+        assert!(matches!(result, Err(AS5600Error::InvalidParameter)));
+
+        let result = driver.set_max_position(5000);
+        assert!(matches!(result, Err(AS5600Error::InvalidParameter)));
+
+        let result = driver.set_max_angle(0xFFFF);
+        assert!(matches!(result, Err(AS5600Error::InvalidParameter)));
+    }
+
+    #[test]
+    fn test_set_position_correctness() {
+        let mock = AS5600Mock::new();
+        let mut driver = AS5600Driver::new(mock.clone());
+
+        // Test ZPOS (Zero Position)
+        driver.set_zero_position(0x0A23).unwrap();
+        let log = mock.mock_get_log();
+        // Expected: Write to ZPOS_HI (0x01) with data [0x0A, 0x23]
+        assert_eq!(log.len(), 1);
+        if let MockTransaction::Write(reg, data) = &log[0] {
+            assert_eq!(*reg, regs::ZPOS_HI);
+            assert_eq!(data, &vec![0x0A, 0x23]);
+        } else {
+            panic!("Expected Write transaction");
+        }
+
+        // Test MPOS (Max Position)
+        driver.set_max_position(0x0FCD).unwrap();
+        let log = mock.mock_get_log();
+        assert_eq!(log.len(), 1);
+        if let MockTransaction::Write(reg, data) = &log[0] {
+            assert_eq!(*reg, regs::MPOS_HI);
+            assert_eq!(data, &vec![0x0F, 0xCD]);
+        } else {
+            panic!("Expected Write transaction");
+        }
     }
 
     #[test]

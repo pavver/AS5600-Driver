@@ -36,6 +36,9 @@ pub trait AS5600Interface {
     /// Writes a new configuration to the chip's volatile memory.
     fn set_config(&mut self, config: Configuration) -> Result<(), AS5600Error<Self::Error>>;
 
+    /// Applies a partial configuration update, minimizing I2C transactions.
+    fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>>;
+
     /// Gets the current zero position (ZPOS).
     fn get_zero_position(&mut self) -> Result<u16, AS5600Error<Self::Error>>;
 
@@ -68,6 +71,7 @@ pub trait AS5600AsyncInterface {
     async fn read_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>>;
     async fn get_config(&mut self) -> Result<Configuration, AS5600Error<Self::Error>>;
     async fn set_config(&mut self, config: Configuration) -> Result<(), AS5600Error<Self::Error>>;
+    async fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>>;
     async fn get_magnet_status(&mut self) -> Result<MagnetStatus, AS5600Error<Self::Error>>;
     async fn get_status_raw(&mut self) -> Result<u8, AS5600Error<Self::Error>>;
     async fn get_agc(&mut self) -> Result<u8, AS5600Error<Self::Error>>;

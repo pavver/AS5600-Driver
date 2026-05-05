@@ -1,3 +1,5 @@
+use crate::regs::regs::*;
+
 /// Power consumption modes of the AS5600.
 ///
 /// Lower power modes reduce current consumption by increasing the sampling interval.
@@ -109,31 +111,21 @@ pub struct MagnetStatus {
 /// This struct maps to the CONF_HI and CONF_LO registers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Configuration {
-    /// Current power mode.
     pub power_mode: PowerMode,
-    /// Hysteresis setting.
     pub hysteresis: Hysteresis,
-    /// Output pin functionality.
     pub output_stage: OutputStage,
-    /// Frequency for PWM output.
     pub pwm_frequency: PwmFrequency,
-    /// Slow filter averaging factor.
     pub slow_filter: SlowFilter,
-    /// Threshold for fast filter bypass.
     pub fast_filter_threshold: FastFilterThreshold,
-    /// Enable/Disable the watchdog timer (auto-low-power after 1 minute of inactivity).
     pub watchdog: bool,
 }
 
 impl Configuration {
-    /// Returns a new configuration builder.
     pub fn builder() -> ConfigurationBuilder {
-        ConfigurationBuilder::default()
+        ConfigurationBuilder::new()
     }
 
-    /// Creates a configuration from the raw CONF_HI and CONF_LO register bytes.
     pub fn from_bytes(hi: u8, lo: u8) -> Self {
-        use crate::regs::regs::*;
         Self {
             power_mode: match lo & CONF_PM_MASK {
                 0b01 => PowerMode::LPM1,
@@ -178,88 +170,102 @@ impl Configuration {
         }
     }
 
-    /// Converts the configuration into raw (CONF_HI, CONF_LO) register bytes.
     pub fn to_bytes(&self) -> (u8, u8) {
         let hi = ((self.watchdog as u8) << 5)
             | ((self.fast_filter_threshold as u8) << 2)
             | (self.slow_filter as u8);
-
         let lo = ((self.pwm_frequency as u8) << 6)
             | ((self.output_stage as u8) << 4)
             | ((self.hysteresis as u8) << 2)
             | (self.power_mode as u8);
-
         (hi, lo)
     }
 }
 
-/// A builder for the [`Configuration`] struct.
-///
-/// Use this to easily construct a configuration by changing only the fields you need.
-#[derive(Debug, Clone, Copy)]
+/// A builder for the [`Configuration`] struct that tracks which fields were changed.
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ConfigurationBuilder {
-    config: Configuration,
+    pub(crate) power_mode: Option<PowerMode>,
+    pub(crate) hysteresis: Option<Hysteresis>,
+    pub(crate) output_stage: Option<OutputStage>,
+    pub(crate) pwm_frequency: Option<PwmFrequency>,
+    pub(crate) slow_filter: Option<SlowFilter>,
+    pub(crate) fast_filter_threshold: Option<FastFilterThreshold>,
+    pub(crate) watchdog: Option<bool>,
 }
 
 impl ConfigurationBuilder {
-    /// Creates a new builder with default sensor settings.
     pub fn new() -> Self {
-        Self {
-            config: Configuration::default(),
-        }
+        Self::default()
     }
 
-    /// Sets the power consumption mode.
     pub fn power_mode(mut self, mode: PowerMode) -> Self {
-        self.config.power_mode = mode;
+        self.power_mode = Some(mode);
         self
     }
 
-    /// Sets the hysteresis level.
     pub fn hysteresis(mut self, hysteresis: Hysteresis) -> Self {
-        self.config.hysteresis = hysteresis;
+        self.hysteresis = Some(hysteresis);
         self
     }
 
-    /// Sets the output pin functionality.
     pub fn output_stage(mut self, output_stage: OutputStage) -> Self {
-        self.config.output_stage = output_stage;
+        self.output_stage = Some(output_stage);
         self
     }
 
-    /// Sets the PWM signal frequency.
     pub fn pwm_frequency(mut self, frequency: PwmFrequency) -> Self {
-        self.config.pwm_frequency = frequency;
+        self.pwm_frequency = Some(frequency);
         self
     }
 
-    /// Sets the slow filter averaging factor.
     pub fn slow_filter(mut self, filter: SlowFilter) -> Self {
-        self.config.slow_filter = filter;
+        self.slow_filter = Some(filter);
         self
     }
 
-    /// Sets the fast filter threshold.
     pub fn fast_filter_threshold(mut self, threshold: FastFilterThreshold) -> Self {
-        self.config.fast_filter_threshold = threshold;
+        self.fast_filter_threshold = Some(threshold);
         self
     }
 
-    /// Enables or disables the watchdog timer.
     pub fn watchdog(mut self, enabled: bool) -> Self {
-        self.config.watchdog = enabled;
+        self.watchdog = Some(enabled);
         self
     }
 
-    /// Returns the finalized [`Configuration`].
-    pub fn build(self) -> Configuration {
-        self.config
+    /// Checks if any field in the CONF_HI register (WD, FTH, SF) was modified.
+    pub fn is_hi_dirty(&self) -> bool {
+        self.watchdog.is_some() || self.fast_filter_threshold.is_some() || self.slow_filter.is_some()
     }
-}
 
-impl Default for ConfigurationBuilder {
-    fn default() -> Self {
-        Self::new()
+    /// Checks if all fields in the CONF_HI register were modified (allowing direct write).
+    pub fn is_hi_complete(&self) -> bool {
+        self.watchdog.is_some() && self.fast_filter_threshold.is_some() && self.slow_filter.is_some()
+    }
+
+    /// Checks if any field in the CONF_LO register (PWMF, OUTS, HYST, PM) was modified.
+    pub fn is_lo_dirty(&self) -> bool {
+        self.pwm_frequency.is_some() || self.output_stage.is_some() || self.hysteresis.is_some() || self.power_mode.is_some()
+    }
+
+    /// Checks if all fields in the CONF_LO register were modified (allowing direct write).
+    pub fn is_lo_complete(&self) -> bool {
+        self.pwm_frequency.is_some() && self.output_stage.is_some() && self.hysteresis.is_some() && self.power_mode.is_some()
+    }
+
+    /// Builds a full configuration using default values for unset fields.
+    pub fn build(self) -> Configuration {
+        let d = Configuration::default();
+        Configuration {
+            power_mode: self.power_mode.unwrap_or(d.power_mode),
+            hysteresis: self.hysteresis.unwrap_or(d.hysteresis),
+            output_stage: self.output_stage.unwrap_or(d.output_stage),
+            pwm_frequency: self.pwm_frequency.unwrap_or(d.pwm_frequency),
+            slow_filter: self.slow_filter.unwrap_or(d.slow_filter),
+            fast_filter_threshold: self.fast_filter_threshold.unwrap_or(d.fast_filter_threshold),
+            watchdog: self.watchdog.unwrap_or(d.watchdog),
+        }
     }
 }
 
@@ -277,20 +283,11 @@ impl Default for Configuration {
     }
 }
 
-/// A comprehensive snapshot of the sensor status and readings.
-///
-/// This structure is used for optimized batch reading of all diagnostic
-/// information in a single I2C transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Diagnostics {
-    /// The current 12-bit angle after all filters.
     pub angle: u16,
-    /// The 12-bit raw angle directly from the sensors.
     pub raw_angle: u16,
-    /// Current health status of the magnetic system.
     pub magnet_status: MagnetStatus,
-    /// Current Automatic Gain Control value (0..255).
     pub agc: u8,
-    /// Current magnitude of the magnetic field (12-bit).
     pub magnitude: u16,
 }

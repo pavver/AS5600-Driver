@@ -168,6 +168,62 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         Ok(())
     }
 
+    async fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>> {
+        // --- Handle CONF_HI (WD, FTH, SF) ---
+        if builder.is_hi_dirty() {
+            let hi_val = if builder.is_hi_complete() {
+                let d = Configuration::default(); // Used just for bit layout
+                ((builder.watchdog.unwrap_or(d.watchdog) as u8) << 5)
+                    | ((builder.fast_filter_threshold.unwrap_or(d.fast_filter_threshold) as u8) << 2)
+                    | (builder.slow_filter.unwrap_or(d.slow_filter) as u8)
+            } else {
+                // Read-Modify-Write
+                let mut current = self.read_u8_async(regs::CONF_HI).await?;
+                if let Some(wd) = builder.watchdog {
+                    current = (current & !regs::CONF_WD_MASK) | ((wd as u8) << 5);
+                }
+                if let Some(fth) = builder.fast_filter_threshold {
+                    current = (current & !regs::CONF_FTH_MASK) | ((fth as u8) << 2);
+                }
+                if let Some(sf) = builder.slow_filter {
+                    current = (current & !regs::CONF_SF_MASK) | (sf as u8);
+                }
+                current
+            };
+            self.i2c.write(self.address, &[regs::CONF_HI, hi_val]).await.map_err(AS5600Error::I2c)?;
+        }
+
+        // --- Handle CONF_LO (PWMF, OUTS, HYST, PM) ---
+        if builder.is_lo_dirty() {
+            let lo_val = if builder.is_lo_complete() {
+                let d = Configuration::default();
+                ((builder.pwm_frequency.unwrap_or(d.pwm_frequency) as u8) << 6)
+                    | ((builder.output_stage.unwrap_or(d.output_stage) as u8) << 4)
+                    | ((builder.hysteresis.unwrap_or(d.hysteresis) as u8) << 2)
+                    | (builder.power_mode.unwrap_or(d.power_mode) as u8)
+            } else {
+                // Read-Modify-Write
+                let mut current = self.read_u8_async(regs::CONF_LO).await?;
+                if let Some(pwmf) = builder.pwm_frequency {
+                    current = (current & !regs::CONF_PWMF_MASK) | ((pwmf as u8) << 6);
+                }
+                if let Some(outs) = builder.output_stage {
+                    current = (current & !regs::CONF_OUTS_MASK) | ((outs as u8) << 4);
+                }
+                if let Some(hyst) = builder.hysteresis {
+                    current = (current & !regs::CONF_HYST_MASK) | ((hyst as u8) << 2);
+                }
+                if let Some(pm) = builder.power_mode {
+                    current = (current & !regs::CONF_PM_MASK) | (pm as u8);
+                }
+                current
+            };
+            self.i2c.write(self.address, &[regs::CONF_LO, lo_val]).await.map_err(AS5600Error::I2c)?;
+        }
+
+        Ok(())
+    }
+
     async fn get_zero_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
         self.read_u16_async(regs::ZPOS_HI).await
     }
@@ -268,6 +324,60 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
         self.i2c
             .write(self.address, &[regs::CONF_HI, hi, lo])
             .map_err(AS5600Error::I2c)?;
+        Ok(())
+    }
+
+    fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>> {
+        // --- Handle CONF_HI (WD, FTH, SF) ---
+        if builder.is_hi_dirty() {
+            let hi_val = if builder.is_hi_complete() {
+                let d = Configuration::default();
+                ((builder.watchdog.unwrap_or(d.watchdog) as u8) << 5)
+                    | ((builder.fast_filter_threshold.unwrap_or(d.fast_filter_threshold) as u8) << 2)
+                    | (builder.slow_filter.unwrap_or(d.slow_filter) as u8)
+            } else {
+                let mut current = self.read_u8(regs::CONF_HI)?;
+                if let Some(wd) = builder.watchdog {
+                    current = (current & !regs::CONF_WD_MASK) | ((wd as u8) << 5);
+                }
+                if let Some(fth) = builder.fast_filter_threshold {
+                    current = (current & !regs::CONF_FTH_MASK) | ((fth as u8) << 2);
+                }
+                if let Some(sf) = builder.slow_filter {
+                    current = (current & !regs::CONF_SF_MASK) | (sf as u8);
+                }
+                current
+            };
+            self.i2c.write(self.address, &[regs::CONF_HI, hi_val]).map_err(AS5600Error::I2c)?;
+        }
+
+        // --- Handle CONF_LO (PWMF, OUTS, HYST, PM) ---
+        if builder.is_lo_dirty() {
+            let lo_val = if builder.is_lo_complete() {
+                let d = Configuration::default();
+                ((builder.pwm_frequency.unwrap_or(d.pwm_frequency) as u8) << 6)
+                    | ((builder.output_stage.unwrap_or(d.output_stage) as u8) << 4)
+                    | ((builder.hysteresis.unwrap_or(d.hysteresis) as u8) << 2)
+                    | (builder.power_mode.unwrap_or(d.power_mode) as u8)
+            } else {
+                let mut current = self.read_u8(regs::CONF_LO)?;
+                if let Some(pwmf) = builder.pwm_frequency {
+                    current = (current & !regs::CONF_PWMF_MASK) | ((pwmf as u8) << 6);
+                }
+                if let Some(outs) = builder.output_stage {
+                    current = (current & !regs::CONF_OUTS_MASK) | ((outs as u8) << 4);
+                }
+                if let Some(hyst) = builder.hysteresis {
+                    current = (current & !regs::CONF_HYST_MASK) | ((hyst as u8) << 2);
+                }
+                if let Some(pm) = builder.power_mode {
+                    current = (current & !regs::CONF_PM_MASK) | (pm as u8);
+                }
+                current
+            };
+            self.i2c.write(self.address, &[regs::CONF_LO, lo_val]).map_err(AS5600Error::I2c)?;
+        }
+
         Ok(())
     }
 

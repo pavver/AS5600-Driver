@@ -1,5 +1,25 @@
 use crate::regs::regs::*;
 
+/// A token required to perform permanent programming (burning) of the AS5600 chip.
+///
+/// This is a "Command Token" pattern that prevents accidental execution of irreversible
+/// operations. Burning can only be done a limited number of times (ZMCO limit).
+#[derive(Debug, Clone, Copy)]
+pub struct BurnToken {
+    _priv: (),
+}
+
+impl BurnToken {
+    /// Creates a new token, confirming the intent to permanently burn settings.
+    ///
+    /// # Safety Warning
+    /// This operation is **irreversible**. Once burned, the settings cannot be changed
+    /// back to the factory state. Ensure your configuration and positions are correct.
+    pub fn confirm_permanent_burn() -> Self {
+        Self { _priv: () }
+    }
+}
+
 /// Power consumption modes of the AS5600.
 ///
 /// Lower power modes reduce current consumption by increasing the sampling interval.
@@ -305,6 +325,39 @@ impl ConfigurationBuilder {
                 .unwrap_or(d.fast_filter_threshold),
             watchdog: self.watchdog.unwrap_or(d.watchdog),
         }
+    }
+
+    /// Internal helper to calculate the byte for the CONF_HI register based on current value.
+    pub(crate) fn calculate_hi(&self, current: u8) -> u8 {
+        let mut val = current;
+        if let Some(wd) = self.watchdog {
+            val = (val & !CONF_WD_MASK) | ((wd as u8) << 5);
+        }
+        if let Some(fth) = self.fast_filter_threshold {
+            val = (val & !CONF_FTH_MASK) | ((fth as u8) << 2);
+        }
+        if let Some(sf) = self.slow_filter {
+            val = (val & !CONF_SF_MASK) | (sf as u8);
+        }
+        val
+    }
+
+    /// Internal helper to calculate the byte for the CONF_LO register based on current value.
+    pub(crate) fn calculate_lo(&self, current: u8) -> u8 {
+        let mut val = current;
+        if let Some(pwmf) = self.pwm_frequency {
+            val = (val & !CONF_PWMF_MASK) | ((pwmf as u8) << 6);
+        }
+        if let Some(outs) = self.output_stage {
+            val = (val & !CONF_OUTS_MASK) | ((outs as u8) << 4);
+        }
+        if let Some(hyst) = self.hysteresis {
+            val = (val & !CONF_HYST_MASK) | ((hyst as u8) << 2);
+        }
+        if let Some(pm) = self.power_mode {
+            val = (val & !CONF_PM_MASK) | (pm as u8);
+        }
+        val
     }
 }
 

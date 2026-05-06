@@ -144,9 +144,21 @@ let mut other_sensor = OtherSensor::new(&mut bus, 0x42);
 ```
 
 ## ⚠️ Safety Warning: OTP Programming
-The AS5600 has One-Time Programmable (OTP) memory. These methods perform permanent, irreversible hardware changes:
-- `danger_permanent_burn_settings()`: Programs ZPOS and MPOS. Max **3 times**.
-- `danger_permanent_burn_config()`: Programs CONF register. **ONLY ONCE**.
+The AS5600 supports permanent burning of settings to its One-Time Programmable (OTP) memory. 
+This is an **irreversible** operation. To prevent accidental execution, the driver uses the **Command Token** pattern.
+
+```rust
+use AS5600_Driver::BurnToken;
+
+// 1. Create a token to confirm your intent
+let token = BurnToken::confirm_permanent_burn();
+
+// 2. Perform the burn
+sensor.permanent_burn_settings(token)?;
+```
+
+- `permanent_burn_settings(token)`: Programs ZPOS and MPOS. Max **3 times**.
+- `permanent_burn_config(token)`: Programs CONF register. **ONLY ONCE**.
 
 ## Support the Project / Підтримати проект
 

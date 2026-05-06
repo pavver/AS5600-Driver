@@ -93,4 +93,10 @@ pub mod regs {
     pub const BURN_SETTINGS_CMD: u8 = 0x80;
     /// Command to burn Configuration permanently.
     pub const BURN_CONFIG_CMD: u8 = 0x40;
+
+    /// Offset from STATUS (0x0B) to other diagnostic registers.
+    pub const RAW_ANGLE_OFFSET: usize = (RAW_ANGLE_HI - STATUS) as usize;
+    pub const ANGLE_OFFSET: usize = (ANGLE_HI - STATUS) as usize;
+    pub const AGC_OFFSET: usize = (AGC - STATUS) as usize;
+    pub const MAGNITUDE_OFFSET: usize = (MAGNITUDE_HI - STATUS) as usize;
 }

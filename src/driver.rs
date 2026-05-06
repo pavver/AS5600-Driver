@@ -10,6 +10,15 @@ pub struct AS5600Driver<I2C> {
     address: u8,
 }
 
+macro_rules! i2c_call {
+    ($self:ident, $method:ident, $($args:expr),*) => {
+        $self.i2c.$method($self.address, $($args),*)
+    };
+    (await $self:ident, $method:ident, $($args:expr),*) => {
+        $self.i2c.$method($self.address, $($args),*).await
+    };
+}
+
 impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
     /// Creates a new driver instance with the default I2C address (0x36).
     pub fn new(i2c: I2C) -> Self {
@@ -29,7 +38,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
         let mut buf = [0u8; 1];
         self.i2c
             .write_read(self.address, &[reg], &mut buf)
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(buf[0])
     }
 
@@ -38,7 +47,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
         let mut buf = [0u8; 2];
         self.i2c
             .write_read(self.address, &[reg_hi], &mut buf)
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
     }
 
@@ -50,27 +59,29 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
         let bytes = value.to_be_bytes();
         self.i2c
             .write(self.address, &[reg_hi, bytes[0], bytes[1]])
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(())
     }
 
-    /// **DANGER**: Permanently burns ZPOS and MPOS settings to the chip.
-    pub unsafe fn danger_permanent_burn_settings(&mut self) -> Result<(), AS5600Error<I2C::Error>> {
+    /// Permanently burns ZPOS and MPOS settings to the chip.
+    ///
+    /// This requires a [`BurnToken`] to confirm the irreversible intent.
+    /// The AS5600 allows burning ZPOS/MPOS settings up to 3 times (see ZMCO).
+    pub fn permanent_burn_settings(&mut self, _token: BurnToken) -> Result<(), AS5600Error<I2C::Error>> {
         let count = self.get_burn_count()?;
         if count >= 3 {
             return Err(AS5600Error::OtpMaxBurnsReached);
         }
-        self.i2c
-            .write(self.address, &[regs::BURN, regs::BURN_SETTINGS_CMD])
-            .map_err(AS5600Error::I2c)?;
+        i2c_call!(self, write, &[regs::BURN, regs::BURN_SETTINGS_CMD])?;
         Ok(())
     }
 
-    /// **DANGER**: Permanently burns Configuration settings to the chip.
-    pub unsafe fn danger_permanent_burn_config(&mut self) -> Result<(), AS5600Error<I2C::Error>> {
-        self.i2c
-            .write(self.address, &[regs::BURN, regs::BURN_CONFIG_CMD])
-            .map_err(AS5600Error::I2c)?;
+    /// Permanently burns Configuration settings to the chip.
+    ///
+    /// This requires a [`BurnToken`] to confirm the irreversible intent.
+    /// The AS5600 allows burning the configuration **ONLY ONCE**.
+    pub fn permanent_burn_config(&mut self, _token: BurnToken) -> Result<(), AS5600Error<I2C::Error>> {
+        i2c_call!(self, write, &[regs::BURN, regs::BURN_CONFIG_CMD])?;
         Ok(())
     }
 }
@@ -83,7 +94,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
         self.i2c
             .write_read(self.address, &[reg], &mut buf)
             .await
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(buf[0])
     }
 
@@ -93,7 +104,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
         self.i2c
             .write_read(self.address, &[reg_hi], &mut buf)
             .await
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
     }
 
@@ -110,7 +121,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
         self.i2c
             .write(self.address, &[reg_hi, bytes[0], bytes[1]])
             .await
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(())
     }
 }
@@ -159,7 +170,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         self.i2c
             .write_read(self.address, &[regs::CONF_HI], &mut buf)
             .await
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(Configuration::from_bytes(buf[0], buf[1]))
     }
 
@@ -168,7 +179,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         self.i2c
             .write(self.address, &[regs::CONF_HI, hi, lo])
             .await
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(())
     }
 
@@ -179,62 +190,21 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         // --- Handle CONF_HI (WD, FTH, SF) ---
         if builder.is_hi_dirty() {
             let hi_val = if builder.is_hi_complete() {
-                let d = Configuration::default(); // Used just for bit layout
-                ((builder.watchdog.unwrap_or(d.watchdog) as u8) << 5)
-                    | ((builder
-                        .fast_filter_threshold
-                        .unwrap_or(d.fast_filter_threshold) as u8)
-                        << 2)
-                    | (builder.slow_filter.unwrap_or(d.slow_filter) as u8)
+                builder.calculate_hi(0)
             } else {
-                // Read-Modify-Write
-                let mut current = self.read_u8_async(regs::CONF_HI).await?;
-                if let Some(wd) = builder.watchdog {
-                    current = (current & !regs::CONF_WD_MASK) | ((wd as u8) << 5);
-                }
-                if let Some(fth) = builder.fast_filter_threshold {
-                    current = (current & !regs::CONF_FTH_MASK) | ((fth as u8) << 2);
-                }
-                if let Some(sf) = builder.slow_filter {
-                    current = (current & !regs::CONF_SF_MASK) | (sf as u8);
-                }
-                current
+                builder.calculate_hi(self.read_u8_async(regs::CONF_HI).await?)
             };
-            self.i2c
-                .write(self.address, &[regs::CONF_HI, hi_val])
-                .await
-                .map_err(AS5600Error::I2c)?;
+            i2c_call!(await self, write, &[regs::CONF_HI, hi_val])?;
         }
 
         // --- Handle CONF_LO (PWMF, OUTS, HYST, PM) ---
         if builder.is_lo_dirty() {
             let lo_val = if builder.is_lo_complete() {
-                let d = Configuration::default();
-                ((builder.pwm_frequency.unwrap_or(d.pwm_frequency) as u8) << 6)
-                    | ((builder.output_stage.unwrap_or(d.output_stage) as u8) << 4)
-                    | ((builder.hysteresis.unwrap_or(d.hysteresis) as u8) << 2)
-                    | (builder.power_mode.unwrap_or(d.power_mode) as u8)
+                builder.calculate_lo(0)
             } else {
-                // Read-Modify-Write
-                let mut current = self.read_u8_async(regs::CONF_LO).await?;
-                if let Some(pwmf) = builder.pwm_frequency {
-                    current = (current & !regs::CONF_PWMF_MASK) | ((pwmf as u8) << 6);
-                }
-                if let Some(outs) = builder.output_stage {
-                    current = (current & !regs::CONF_OUTS_MASK) | ((outs as u8) << 4);
-                }
-                if let Some(hyst) = builder.hysteresis {
-                    current = (current & !regs::CONF_HYST_MASK) | ((hyst as u8) << 2);
-                }
-                if let Some(pm) = builder.power_mode {
-                    current = (current & !regs::CONF_PM_MASK) | (pm as u8);
-                }
-                current
+                builder.calculate_lo(self.read_u8_async(regs::CONF_LO).await?)
             };
-            self.i2c
-                .write(self.address, &[regs::CONF_LO, lo_val])
-                .await
-                .map_err(AS5600Error::I2c)?;
+            i2c_call!(await self, write, &[regs::CONF_LO, lo_val])?;
         }
 
         Ok(())
@@ -268,14 +238,18 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         let mut buf = [0u8; 18];
         self.i2c
             .write_read(self.address, &[regs::STATUS], &mut buf)
-            .await
-            .map_err(AS5600Error::I2c)?;
+            .await?;
 
         let status_val = buf[0];
-        let raw_angle = u16::from_be_bytes([buf[1], buf[2]]) & regs::ANGLE_MASK;
-        let angle = u16::from_be_bytes([buf[3], buf[4]]) & regs::ANGLE_MASK;
-        let agc = buf[15];
-        let magnitude = u16::from_be_bytes([buf[16], buf[17]]) & regs::ANGLE_MASK;
+        let raw_angle =
+            u16::from_be_bytes([buf[regs::RAW_ANGLE_OFFSET], buf[regs::RAW_ANGLE_OFFSET + 1]])
+                & regs::ANGLE_MASK;
+        let angle = u16::from_be_bytes([buf[regs::ANGLE_OFFSET], buf[regs::ANGLE_OFFSET + 1]])
+            & regs::ANGLE_MASK;
+        let agc = buf[regs::AGC_OFFSET];
+        let magnitude =
+            u16::from_be_bytes([buf[regs::MAGNITUDE_OFFSET], buf[regs::MAGNITUDE_OFFSET + 1]])
+                & regs::ANGLE_MASK;
 
         Ok(Diagnostics {
             angle,
@@ -331,7 +305,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
         let mut buf = [0u8; 2];
         self.i2c
             .write_read(self.address, &[regs::CONF_HI], &mut buf)
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(Configuration::from_bytes(buf[0], buf[1]))
     }
 
@@ -339,7 +313,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
         let (hi, lo) = config.to_bytes();
         self.i2c
             .write(self.address, &[regs::CONF_HI, hi, lo])
-            .map_err(AS5600Error::I2c)?;
+            ?;
         Ok(())
     }
 
@@ -350,58 +324,21 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
         // --- Handle CONF_HI (WD, FTH, SF) ---
         if builder.is_hi_dirty() {
             let hi_val = if builder.is_hi_complete() {
-                let d = Configuration::default();
-                ((builder.watchdog.unwrap_or(d.watchdog) as u8) << 5)
-                    | ((builder
-                        .fast_filter_threshold
-                        .unwrap_or(d.fast_filter_threshold) as u8)
-                        << 2)
-                    | (builder.slow_filter.unwrap_or(d.slow_filter) as u8)
+                builder.calculate_hi(0) // Default layout
             } else {
-                let mut current = self.read_u8(regs::CONF_HI)?;
-                if let Some(wd) = builder.watchdog {
-                    current = (current & !regs::CONF_WD_MASK) | ((wd as u8) << 5);
-                }
-                if let Some(fth) = builder.fast_filter_threshold {
-                    current = (current & !regs::CONF_FTH_MASK) | ((fth as u8) << 2);
-                }
-                if let Some(sf) = builder.slow_filter {
-                    current = (current & !regs::CONF_SF_MASK) | (sf as u8);
-                }
-                current
+                builder.calculate_hi(self.read_u8(regs::CONF_HI)?)
             };
-            self.i2c
-                .write(self.address, &[regs::CONF_HI, hi_val])
-                .map_err(AS5600Error::I2c)?;
+            i2c_call!(self, write, &[regs::CONF_HI, hi_val])?;
         }
 
         // --- Handle CONF_LO (PWMF, OUTS, HYST, PM) ---
         if builder.is_lo_dirty() {
             let lo_val = if builder.is_lo_complete() {
-                let d = Configuration::default();
-                ((builder.pwm_frequency.unwrap_or(d.pwm_frequency) as u8) << 6)
-                    | ((builder.output_stage.unwrap_or(d.output_stage) as u8) << 4)
-                    | ((builder.hysteresis.unwrap_or(d.hysteresis) as u8) << 2)
-                    | (builder.power_mode.unwrap_or(d.power_mode) as u8)
+                builder.calculate_lo(0)
             } else {
-                let mut current = self.read_u8(regs::CONF_LO)?;
-                if let Some(pwmf) = builder.pwm_frequency {
-                    current = (current & !regs::CONF_PWMF_MASK) | ((pwmf as u8) << 6);
-                }
-                if let Some(outs) = builder.output_stage {
-                    current = (current & !regs::CONF_OUTS_MASK) | ((outs as u8) << 4);
-                }
-                if let Some(hyst) = builder.hysteresis {
-                    current = (current & !regs::CONF_HYST_MASK) | ((hyst as u8) << 2);
-                }
-                if let Some(pm) = builder.power_mode {
-                    current = (current & !regs::CONF_PM_MASK) | (pm as u8);
-                }
-                current
+                builder.calculate_lo(self.read_u8(regs::CONF_LO)?)
             };
-            self.i2c
-                .write(self.address, &[regs::CONF_LO, lo_val])
-                .map_err(AS5600Error::I2c)?;
+            i2c_call!(self, write, &[regs::CONF_LO, lo_val])?;
         }
 
         Ok(())
@@ -435,14 +372,18 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
         // Read from STATUS (0x0B) to MAGNITUDE_LO (0x1C) = 18 bytes
         let mut buf = [0u8; 18];
         self.i2c
-            .write_read(self.address, &[regs::STATUS], &mut buf)
-            .map_err(AS5600Error::I2c)?;
+            .write_read(self.address, &[regs::STATUS], &mut buf)?;
 
         let status_val = buf[0];
-        let raw_angle = u16::from_be_bytes([buf[1], buf[2]]) & regs::ANGLE_MASK;
-        let angle = u16::from_be_bytes([buf[3], buf[4]]) & regs::ANGLE_MASK;
-        let agc = buf[15]; // AGC is at 0x1A, which is 0x0B + 15
-        let magnitude = u16::from_be_bytes([buf[16], buf[17]]) & regs::ANGLE_MASK;
+        let raw_angle =
+            u16::from_be_bytes([buf[regs::RAW_ANGLE_OFFSET], buf[regs::RAW_ANGLE_OFFSET + 1]])
+                & regs::ANGLE_MASK;
+        let angle = u16::from_be_bytes([buf[regs::ANGLE_OFFSET], buf[regs::ANGLE_OFFSET + 1]])
+            & regs::ANGLE_MASK;
+        let agc = buf[regs::AGC_OFFSET];
+        let magnitude =
+            u16::from_be_bytes([buf[regs::MAGNITUDE_OFFSET], buf[regs::MAGNITUDE_OFFSET + 1]])
+                & regs::ANGLE_MASK;
 
         Ok(Diagnostics {
             angle,
@@ -702,6 +643,34 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_apply_config_async() {
+            let mock = AS5600Mock::new();
+            let mut driver = AS5600Driver::new(mock.clone());
+            
+            // Partial update
+            mock.mock_clear_log();
+            AS5600AsyncInterface::apply_config(&mut driver, ConfigurationBuilder::new().watchdog(false))
+                .await
+                .unwrap();
+            assert_eq!(mock.mock_get_log().len(), 2);
+        }
+
+        #[tokio::test]
+        async fn test_positions_async() {
+            let mock = AS5600Mock::new();
+            let mut driver = AS5600Driver::new(mock);
+            
+            AS5600AsyncInterface::set_zero_position(&mut driver, 100).await.unwrap();
+            assert_eq!(AS5600AsyncInterface::get_zero_position(&mut driver).await.unwrap(), 100);
+            
+            AS5600AsyncInterface::set_max_position(&mut driver, 200).await.unwrap();
+            assert_eq!(AS5600AsyncInterface::get_max_position(&mut driver).await.unwrap(), 200);
+            
+            AS5600AsyncInterface::set_max_angle(&mut driver, 300).await.unwrap();
+            assert_eq!(AS5600AsyncInterface::get_max_angle(&mut driver).await.unwrap(), 300);
+        }
+
+        #[tokio::test]
         async fn test_diagnostics_async() {
             let mock = AS5600Mock::new();
             mock.mock_set_raw_angle(3000);
@@ -710,6 +679,37 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(diag.raw_angle, 3000);
+            
+            assert_eq!(AS5600AsyncInterface::get_burn_count(&mut driver).await.unwrap(), 0);
+            assert_eq!(AS5600AsyncInterface::get_status_raw(&mut driver).await.unwrap(), regs::STATUS_MD_MASK);
+            assert_eq!(AS5600AsyncInterface::get_agc(&mut driver).await.unwrap(), 100);
+        }
+    }
+
+    #[test]
+    fn test_permanent_burn_safety() {
+        let mock = AS5600Mock::new();
+        let mut driver = AS5600Driver::new(mock.clone());
+        let token = BurnToken::confirm_permanent_burn();
+        
+        // Test burning settings
+        driver.permanent_burn_settings(token).unwrap();
+        let log = mock.mock_get_log();
+        assert_eq!(log.len(), 2); // 1 Read (ZMCO) + 1 Write (BURN)
+        if let MockTransaction::Write(reg, data) = &log[1] {
+            assert_eq!(*reg, regs::BURN);
+            assert_eq!(data, &vec![regs::BURN_SETTINGS_CMD]);
+        } else {
+            panic!("Expected Write to BURN register");
+        }
+        
+        // Test burning config
+        driver.permanent_burn_config(token).unwrap();
+        let log = mock.mock_get_log();
+        assert_eq!(log.len(), 1);
+        if let MockTransaction::Write(reg, data) = &log[0] {
+            assert_eq!(*reg, regs::BURN);
+            assert_eq!(data, &vec![regs::BURN_CONFIG_CMD]);
         }
     }
 }

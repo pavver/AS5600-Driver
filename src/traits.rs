@@ -60,6 +60,9 @@ pub trait AS5600Interface {
     /// Sets the maximum angle (MANG) in volatile memory.
     fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>>;
 
+    /// Checks if the sensor is connected and responding on the I2C bus.
+    fn is_connected(&mut self) -> bool;
+
     /// Reads all diagnostic data (Angle, Raw Angle, Status, AGC, Magnitude) in one optimized transaction.
     fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>>;
 }
@@ -69,6 +72,9 @@ pub trait AS5600Interface {
 #[allow(async_fn_in_trait)]
 pub trait AS5600AsyncInterface {
     type Error;
+
+    /// Checks if the sensor is connected and responding on the I2C bus.
+    async fn is_connected(&mut self) -> bool;
 
     async fn read_raw_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>>;
     async fn read_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>>;

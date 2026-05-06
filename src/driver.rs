@@ -36,18 +36,14 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
     /// Internal helper to read a single byte from a register.
     fn read_u8(&mut self, reg: u8) -> Result<u8, AS5600Error<I2C::Error>> {
         let mut buf = [0u8; 1];
-        self.i2c
-            .write_read(self.address, &[reg], &mut buf)
-            ?;
+        self.i2c.write_read(self.address, &[reg], &mut buf)?;
         Ok(buf[0])
     }
 
     /// Internal helper to read a 12-bit value from two consecutive registers.
     fn read_u16(&mut self, reg_hi: u8) -> Result<u16, AS5600Error<I2C::Error>> {
         let mut buf = [0u8; 2];
-        self.i2c
-            .write_read(self.address, &[reg_hi], &mut buf)
-            ?;
+        self.i2c.write_read(self.address, &[reg_hi], &mut buf)?;
         Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
     }
 
@@ -58,8 +54,7 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
         }
         let bytes = value.to_be_bytes();
         self.i2c
-            .write(self.address, &[reg_hi, bytes[0], bytes[1]])
-            ?;
+            .write(self.address, &[reg_hi, bytes[0], bytes[1]])?;
         Ok(())
     }
 
@@ -67,7 +62,10 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
     ///
     /// This requires a [`BurnToken`] to confirm the irreversible intent.
     /// The AS5600 allows burning ZPOS/MPOS settings up to 3 times (see ZMCO).
-    pub fn permanent_burn_settings(&mut self, _token: BurnToken) -> Result<(), AS5600Error<I2C::Error>> {
+    pub fn permanent_burn_settings(
+        &mut self,
+        _token: BurnToken,
+    ) -> Result<(), AS5600Error<I2C::Error>> {
         let count = self.get_burn_count()?;
         if count >= 3 {
             return Err(AS5600Error::OtpMaxBurnsReached);
@@ -80,7 +78,10 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Driver<I2C> {
     ///
     /// This requires a [`BurnToken`] to confirm the irreversible intent.
     /// The AS5600 allows burning the configuration **ONLY ONCE**.
-    pub fn permanent_burn_config(&mut self, _token: BurnToken) -> Result<(), AS5600Error<I2C::Error>> {
+    pub fn permanent_burn_config(
+        &mut self,
+        _token: BurnToken,
+    ) -> Result<(), AS5600Error<I2C::Error>> {
         i2c_call!(self, write, &[regs::BURN, regs::BURN_CONFIG_CMD])?;
         Ok(())
     }
@@ -91,10 +92,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
     /// Internal helper to read a single byte from a register (async).
     async fn read_u8_async(&mut self, reg: u8) -> Result<u8, AS5600Error<I2C::Error>> {
         let mut buf = [0u8; 1];
-        self.i2c
-            .write_read(self.address, &[reg], &mut buf)
-            .await
-            ?;
+        self.i2c.write_read(self.address, &[reg], &mut buf).await?;
         Ok(buf[0])
     }
 
@@ -103,8 +101,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
         let mut buf = [0u8; 2];
         self.i2c
             .write_read(self.address, &[reg_hi], &mut buf)
-            .await
-            ?;
+            .await?;
         Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
     }
 
@@ -120,8 +117,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
         let bytes = value.to_be_bytes();
         self.i2c
             .write(self.address, &[reg_hi, bytes[0], bytes[1]])
-            .await
-            ?;
+            .await?;
         Ok(())
     }
 }
@@ -169,8 +165,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         let mut buf = [0u8; 2];
         self.i2c
             .write_read(self.address, &[regs::CONF_HI], &mut buf)
-            .await
-            ?;
+            .await?;
         Ok(Configuration::from_bytes(buf[0], buf[1]))
     }
 
@@ -178,8 +173,7 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
         let (hi, lo) = config.to_bytes();
         self.i2c
             .write(self.address, &[regs::CONF_HI, hi, lo])
-            .await
-            ?;
+            .await?;
         Ok(())
     }
 
@@ -232,6 +226,10 @@ impl<I2C: embedded_hal_async::i2c::I2c<SevenBitAddress>> crate::traits::AS5600As
 
     async fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
         self.write_u16_async(regs::MANG_HI, angle).await
+    }
+
+    async fn is_connected(&mut self) -> bool {
+        self.read_u8_async(regs::ZMCO).await.is_ok()
     }
 
     async fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
@@ -304,16 +302,13 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     fn get_config(&mut self) -> Result<Configuration, AS5600Error<Self::Error>> {
         let mut buf = [0u8; 2];
         self.i2c
-            .write_read(self.address, &[regs::CONF_HI], &mut buf)
-            ?;
+            .write_read(self.address, &[regs::CONF_HI], &mut buf)?;
         Ok(Configuration::from_bytes(buf[0], buf[1]))
     }
 
     fn set_config(&mut self, config: Configuration) -> Result<(), AS5600Error<Self::Error>> {
         let (hi, lo) = config.to_bytes();
-        self.i2c
-            .write(self.address, &[regs::CONF_HI, hi, lo])
-            ?;
+        self.i2c.write(self.address, &[regs::CONF_HI, hi, lo])?;
         Ok(())
     }
 
@@ -366,6 +361,10 @@ impl<I2C: I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
 
     fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
         self.write_u16(regs::MANG_HI, angle)
+    }
+
+    fn is_connected(&mut self) -> bool {
+        self.read_u8(regs::ZMCO).is_ok()
     }
 
     fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
@@ -646,12 +645,15 @@ mod tests {
         async fn test_apply_config_async() {
             let mock = AS5600Mock::new();
             let mut driver = AS5600Driver::new(mock.clone());
-            
+
             // Partial update
             mock.mock_clear_log();
-            AS5600AsyncInterface::apply_config(&mut driver, ConfigurationBuilder::new().watchdog(false))
-                .await
-                .unwrap();
+            AS5600AsyncInterface::apply_config(
+                &mut driver,
+                ConfigurationBuilder::new().watchdog(false),
+            )
+            .await
+            .unwrap();
             assert_eq!(mock.mock_get_log().len(), 2);
         }
 
@@ -659,15 +661,36 @@ mod tests {
         async fn test_positions_async() {
             let mock = AS5600Mock::new();
             let mut driver = AS5600Driver::new(mock);
-            
-            AS5600AsyncInterface::set_zero_position(&mut driver, 100).await.unwrap();
-            assert_eq!(AS5600AsyncInterface::get_zero_position(&mut driver).await.unwrap(), 100);
-            
-            AS5600AsyncInterface::set_max_position(&mut driver, 200).await.unwrap();
-            assert_eq!(AS5600AsyncInterface::get_max_position(&mut driver).await.unwrap(), 200);
-            
-            AS5600AsyncInterface::set_max_angle(&mut driver, 300).await.unwrap();
-            assert_eq!(AS5600AsyncInterface::get_max_angle(&mut driver).await.unwrap(), 300);
+
+            AS5600AsyncInterface::set_zero_position(&mut driver, 100)
+                .await
+                .unwrap();
+            assert_eq!(
+                AS5600AsyncInterface::get_zero_position(&mut driver)
+                    .await
+                    .unwrap(),
+                100
+            );
+
+            AS5600AsyncInterface::set_max_position(&mut driver, 200)
+                .await
+                .unwrap();
+            assert_eq!(
+                AS5600AsyncInterface::get_max_position(&mut driver)
+                    .await
+                    .unwrap(),
+                200
+            );
+
+            AS5600AsyncInterface::set_max_angle(&mut driver, 300)
+                .await
+                .unwrap();
+            assert_eq!(
+                AS5600AsyncInterface::get_max_angle(&mut driver)
+                    .await
+                    .unwrap(),
+                300
+            );
         }
 
         #[tokio::test]
@@ -679,10 +702,23 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(diag.raw_angle, 3000);
-            
-            assert_eq!(AS5600AsyncInterface::get_burn_count(&mut driver).await.unwrap(), 0);
-            assert_eq!(AS5600AsyncInterface::get_status_raw(&mut driver).await.unwrap(), regs::STATUS_MD_MASK);
-            assert_eq!(AS5600AsyncInterface::get_agc(&mut driver).await.unwrap(), 100);
+
+            assert_eq!(
+                AS5600AsyncInterface::get_burn_count(&mut driver)
+                    .await
+                    .unwrap(),
+                0
+            );
+            assert_eq!(
+                AS5600AsyncInterface::get_status_raw(&mut driver)
+                    .await
+                    .unwrap(),
+                regs::STATUS_MD_MASK
+            );
+            assert_eq!(
+                AS5600AsyncInterface::get_agc(&mut driver).await.unwrap(),
+                100
+            );
         }
     }
 
@@ -691,7 +727,7 @@ mod tests {
         let mock = AS5600Mock::new();
         let mut driver = AS5600Driver::new(mock.clone());
         let token = BurnToken::confirm_permanent_burn();
-        
+
         // Test burning settings
         driver.permanent_burn_settings(token).unwrap();
         let log = mock.mock_get_log();
@@ -702,7 +738,7 @@ mod tests {
         } else {
             panic!("Expected Write to BURN register");
         }
-        
+
         // Test burning config
         driver.permanent_burn_config(token).unwrap();
         let log = mock.mock_get_log();

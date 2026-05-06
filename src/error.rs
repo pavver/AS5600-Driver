@@ -11,6 +11,12 @@ pub enum AS5600Error<E> {
     OtpMaxBurnsReached,
     /// Provided parameter is out of valid range (e.g. angle > 4095).
     InvalidParameter,
+    /// Magnetic field not detected (magnet missing).
+    MagnetMissing,
+    /// Magnetic field too weak (magnet too far).
+    MagnetTooWeak,
+    /// Magnetic field too strong (magnet too close).
+    MagnetTooStrong,
 }
 
 impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
@@ -19,6 +25,9 @@ impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
             AS5600Error::I2c(e) => write!(f, "I2C error: {:?}", e),
             AS5600Error::OtpMaxBurnsReached => write!(f, "OTP programming limit reached"),
             AS5600Error::InvalidParameter => write!(f, "Invalid parameter value provided"),
+            AS5600Error::MagnetMissing => write!(f, "Magnet not detected (missing)"),
+            AS5600Error::MagnetTooWeak => write!(f, "Magnetic field too weak"),
+            AS5600Error::MagnetTooStrong => write!(f, "Magnetic field too strong"),
         }
     }
 }

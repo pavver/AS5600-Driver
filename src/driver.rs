@@ -330,6 +330,35 @@ macro_rules! define_as5600_logic {
                 Ok(())
             }
         );
+
+        #[cfg(feature = "AS5600L")]
+        define_method!($mode,
+            /// Sets a new I2C address (AS5600L only).
+            set_address(&mut self, address: u8) -> Result<(), AS5600Error<Self::Error>> {
+                if address < 0x08 || address > 0x77 {
+                    return Err(AS5600Error::InvalidAddress);
+                }
+
+                let shifted = address << 1;
+                maybe_await!($mode, self.i2c.write(self.address, &[regs::I2CADDR, shifted]))?;
+                maybe_await!($mode, self.i2c.write(self.address, &[regs::I2CUPDT, shifted]))?;
+                self.address = address;
+                Ok(())
+            }
+        );
+
+        #[cfg(feature = "AS5600L")]
+        define_method!($mode,
+            /// Permanently burns the current I2C address to the chip (AS5600L only).
+            permanent_burn_address(
+                &mut self,
+                _token: BurnToken,
+            ) -> Result<(), AS5600Error<Self::Error>> {
+                // Burning address on AS5600L uses the same command as burning config (0x40).
+                maybe_await!($mode, self.i2c.write(self.address, &[regs::BURN, regs::BURN_CONFIG_CMD]))?;
+                Ok(())
+            }
+        );
     };
 }
 

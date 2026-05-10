@@ -23,6 +23,9 @@ pub enum AS5600Error<E> {
     ///
     /// The AS5600 requires a minimum travel of 18 degrees (~205 counts).
     AngularTravelTooSmall,
+    /// Provided I2C address is invalid (AS5600L only).
+    /// Valid range is 0x08..0x77.
+    InvalidAddress,
 }
 
 impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
@@ -37,6 +40,7 @@ impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
             AS5600Error::AngularTravelTooSmall => {
                 write!(f, "Angular travel is too small (min 18°)")
             }
+            AS5600Error::InvalidAddress => write!(f, "Invalid I2C address provided"),
         }
     }
 }

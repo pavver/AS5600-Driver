@@ -103,6 +103,27 @@ macro_rules! define_as5600_trait_methods {
             &mut self,
             token: BurnToken,
         ) -> Result<(), AS5600Error<Self::Error>>;
+
+        /// Sets a new I2C address (AS5600L only).
+        ///
+        /// # Safety Warning
+        /// The new address is applied immediately in volatile memory. To make it permanent,
+        /// call `permanent_burn_address`.
+        ///
+        /// # Errors
+        /// Returns [`AS5600Error::InvalidAddress`] if the address is not in range 0x08..0x77.
+        #[cfg(feature = "AS5600L")]
+        $($async)? fn set_address(&mut self, address: u8) -> Result<(), AS5600Error<Self::Error>>;
+
+        /// Permanently burns the current I2C address to the chip (AS5600L only).
+        ///
+        /// # Safety Warning
+        /// This operation is **irreversible**.
+        #[cfg(feature = "AS5600L")]
+        $($async)? fn permanent_burn_address(
+            &mut self,
+            token: BurnToken,
+        ) -> Result<(), AS5600Error<Self::Error>>;
     };
 }
 

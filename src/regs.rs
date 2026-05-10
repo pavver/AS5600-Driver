@@ -94,6 +94,11 @@ pub mod regs {
     /// Command to burn Configuration permanently.
     pub const BURN_CONFIG_CMD: u8 = 0x40;
 
+    /// I2C Address register (AS5600L only).
+    pub const I2CADDR: u8 = 0x20;
+    /// I2C Update register (AS5600L only).
+    pub const I2CUPDT: u8 = 0x21;
+
     /// Offset from STATUS (0x0B) to other diagnostic registers.
     pub const RAW_ANGLE_OFFSET: usize = (RAW_ANGLE_HI - STATUS) as usize;
     pub const ANGLE_OFFSET: usize = (ANGLE_HI - STATUS) as usize;

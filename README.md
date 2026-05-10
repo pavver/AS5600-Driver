@@ -25,6 +25,7 @@ A comprehensive, low-level, platform-agnostic Rust driver for the **AS5600** mag
 - **Hardware Configuration**: Support for Hysteresis, Power Modes, PWM settings, and Fast/Slow Filters.
 - **Diagnostics**: Methods to monitor magnet detection, magnetic field strength, and Automatic Gain Control (AGC).
 - **OTP Programming**: Permanent burning of settings protected by a **Command Token** pattern to prevent accidental execution.
+- **AS5600L Support**: Change and permanently store custom I2C addresses (requires `AS5600L` feature).
 - **Unified Async/Sync**: Identical logic for both modes thanks to internal macro unification. Full compatibility with `embedded-hal-async` 1.0.
 - **Optimized Reads**: Fetch both angle and magnet status in a single I2C transaction via `read_angle_with_status`.
 - **Fluent Validation**: Chainable health checks for magnet detection and field strength.
@@ -41,8 +42,8 @@ Add this to your `Cargo.toml`:
 # Minimal synchronous version (no-std compatible by default)
 AS5600-Driver = "0.1.2"
 
-# Full version with async and mock support
-AS5600-Driver = { version = "0.1.2", features = ["async", "mock"] }
+# Full version with async, mock and AS5600L support
+AS5600-Driver = { version = "0.1.2", features = ["async", "mock", "AS5600L"] }
 ```
 
 ### ⚙️ Features
@@ -51,6 +52,7 @@ AS5600-Driver = { version = "0.1.2", features = ["async", "mock"] }
 - `std`: Enables standard library support.
 - `anyhow`: Enables integration with `anyhow` crate (requires `std`).
 - `defmt`: Enables `defmt::Format` implementation for all public structures.
+- `AS5600L`: Enables support for AS5600L specific features (I2C address management).
 
 ## 🛠 Usage Examples
 
@@ -118,6 +120,16 @@ encoder.apply_config(
         .watchdog(false)
         .power_mode(PowerMode::LPM1)
 )?;
+```
+
+### Changing I2C Address (AS5600L only)
+```rust
+// 1. Change address in volatile memory (applied immediately)
+encoder.set_address(0x42)?;
+
+// 2. (Optional) Burn the new address permanently
+let token = BurnToken::confirm_permanent_burn();
+encoder.permanent_burn_address(token)?;
 ```
 
 ### Quick Start: Decoupled Interface (Traits)

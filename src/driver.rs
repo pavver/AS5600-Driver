@@ -255,6 +255,11 @@ macro_rules! define_as5600_logic {
 
         define_method!($mode,
             /// Permanently burns ZPOS and MPOS settings to the chip.
+            ///
+            /// # Errors
+            /// - Returns [`AS5600Error::OtpMaxBurnsReached`] if the burn count (ZMCO) is already 3.
+            /// - Returns [`AS5600Error::MagnetMissing`] if no magnet is detected (required by hardware).
+            /// - Returns [`AS5600Error::AngularTravelTooSmall`] if the range between ZPOS and MPOS is < 18°.
             permanent_burn_settings(
                 &mut self,
                 _token: BurnToken,
@@ -263,6 +268,34 @@ macro_rules! define_as5600_logic {
                 if count >= 3 {
                     return Err(AS5600Error::OtpMaxBurnsReached);
                 }
+
+                // According to datasheet, MD bit must be 1 for Burn_Angle to work.
+                let status = maybe_await!($mode, self.$u8(regs::STATUS))?;
+                if (status & regs::STATUS_MD_MASK) == 0 {
+                    return Err(AS5600Error::MagnetMissing);
+                }
+
+                // Minimum angular travel check (18 degrees ~ 205 counts)
+                let mpos = maybe_await!($mode, self.$u16_reg(regs::MPOS_HI))?;
+                if mpos != 0 {
+                    let zpos = maybe_await!($mode, self.$u16_reg(regs::ZPOS_HI))?;
+                    let diff = if mpos >= zpos {
+                        mpos - zpos
+                    } else {
+                        (4096 - zpos) + mpos
+                    };
+
+                    if diff < 205 {
+                        return Err(AS5600Error::AngularTravelTooSmall);
+                    }
+                } else {
+                    // If MPOS is 0, MANG is used. Check current MANG.
+                    let mang = maybe_await!($mode, self.$u16_reg(regs::MANG_HI))?;
+                    if mang > 0 && mang < 205 {
+                        return Err(AS5600Error::AngularTravelTooSmall);
+                    }
+                }
+
                 maybe_await!($mode, self.i2c.write(self.address, &[regs::BURN, regs::BURN_SETTINGS_CMD]))?;
                 Ok(())
             }
@@ -270,10 +303,29 @@ macro_rules! define_as5600_logic {
 
         define_method!($mode,
             /// Permanently burns Configuration settings to the chip.
+            ///
+            /// # Errors
+            /// - Returns [`AS5600Error::OtpMaxBurnsReached`] if ZMCO is not 0.
+            /// - Returns [`AS5600Error::AngularTravelTooSmall`] if MANG is set to < 18°.
+            ///
+            /// # Safety Warning
+            /// According to the datasheet, this command is ONLY executed if ZMCO = 00.
             permanent_burn_config(
                 &mut self,
                 _token: BurnToken,
             ) -> Result<(), AS5600Error<Self::Error>> {
+                let count = maybe_await!($mode, self.$u8(regs::ZMCO))? & regs::ZMCO_MASK;
+                if count != 0 {
+                    return Err(AS5600Error::OtpMaxBurnsReached);
+                }
+
+                // MANG (Maximum Angle) must also be at least 18 degrees.
+                // Default MANG is 0, which means 360 degrees (OK).
+                let mang = maybe_await!($mode, self.$u16_reg(regs::MANG_HI))?;
+                if mang > 0 && mang < 205 {
+                    return Err(AS5600Error::AngularTravelTooSmall);
+                }
+
                 maybe_await!($mode, self.i2c.write(self.address, &[regs::BURN, regs::BURN_CONFIG_CMD]))?;
                 Ok(())
             }
@@ -728,6 +780,11 @@ mod tests {
         #[tokio::test]
         async fn test_permanent_burn_safety_async() {
             let mock = AS5600Mock::new();
+            // Set healthy range for tests
+            mock.mock_set_zpos(0);
+            mock.mock_set_mpos(2000);
+            mock.mock_set_mang(0);
+
             let mut driver = AS5600Driver::new(mock.clone());
             let token = BurnToken::confirm_permanent_burn();
 
@@ -735,26 +792,82 @@ mod tests {
                 .await
                 .unwrap();
             let log = mock.mock_get_log();
-            assert_eq!(log.len(), 2);
+            // 1 Read (ZMCO) + 1 Read (STATUS) + 1 Read (ZPOS) + 1 Read (MPOS) + 1 Write (BURN) = 5 operations
+            assert_eq!(log.len(), 5);
 
             AS5600AsyncInterface::permanent_burn_config(&mut driver, token)
                 .await
                 .unwrap();
-            assert_eq!(mock.mock_get_log().len(), 1);
+            // 1 Read (ZMCO) + 1 Read (MANG) + 1 Write (BURN) = 3 operations
+            assert_eq!(mock.mock_get_log().len(), 3);
+        }
+
+        #[tokio::test]
+        async fn test_permanent_burn_no_magnet_async() {
+            let mock = AS5600Mock::new();
+            mock.mock_set_status(MagnetStatus {
+                detected: false,
+                too_weak: false,
+                too_strong: false,
+            });
+            let mut driver = AS5600Driver::new(mock);
+            let token = BurnToken::confirm_permanent_burn();
+
+            let result = AS5600AsyncInterface::permanent_burn_settings(&mut driver, token).await;
+            assert!(matches!(result, Err(AS5600Error::MagnetMissing)));
+        }
+
+        #[tokio::test]
+        async fn test_permanent_burn_angle_too_small_async() {
+            let mock = AS5600Mock::new();
+            let mut driver = AS5600Driver::new(mock.clone());
+            let token = BurnToken::confirm_permanent_burn();
+
+            // 100 counts is approx 8.7 degrees (< 18)
+            mock.mock_set_zpos(0);
+            mock.mock_set_mpos(100);
+
+            let result = AS5600AsyncInterface::permanent_burn_settings(&mut driver, token).await;
+            assert!(matches!(result, Err(AS5600Error::AngularTravelTooSmall)));
+        }
+        #[tokio::test]
+        async fn test_permanent_burn_angle_wrap_around_valid_async() {
+            let mock = AS5600Mock::new();
+            let mut driver = AS5600Driver::new(mock.clone());
+            let token = BurnToken::confirm_permanent_burn();
+
+            // From 4000 to 100: (4096-4000) + 100 = 196
+            // 196 is still < 205 (~17.2°), so it should fail.
+            mock.mock_set_zpos(4000);
+            mock.mock_set_mpos(100);
+            let result = AS5600AsyncInterface::permanent_burn_settings(&mut driver, token).await;
+            assert!(matches!(result, Err(AS5600Error::AngularTravelTooSmall)));
+
+            // From 4000 to 200: (4096-4000) + 200 = 296
+            // 296 is > 205, so it should pass.
+            mock.mock_set_mpos(200);
+            let result = AS5600AsyncInterface::permanent_burn_settings(&mut driver, token).await;
+            assert!(result.is_ok());
         }
     }
 
     #[test]
     fn test_permanent_burn_safety() {
         let mock = AS5600Mock::new();
+        // Set healthy range for tests
+        mock.mock_set_zpos(0);
+        mock.mock_set_mpos(2000);
+        mock.mock_set_mang(0);
+
         let mut driver = AS5600Driver::new(mock.clone());
         let token = BurnToken::confirm_permanent_burn();
 
         // Test burning settings
         AS5600Interface::permanent_burn_settings(&mut driver, token).unwrap();
         let log = mock.mock_get_log();
-        assert_eq!(log.len(), 2); // 1 Read (ZMCO) + 1 Write (BURN)
-        if let MockTransaction::Write(reg, data) = &log[1] {
+        // 1 Read (ZMCO) + 1 Read (STATUS) + 1 Read (ZPOS) + 1 Read (MPOS) + 1 Write (BURN) = 5
+        assert_eq!(log.len(), 5);
+        if let MockTransaction::Write(reg, data) = &log[4] {
             assert_eq!(*reg, regs::BURN);
             assert_eq!(data, &vec![regs::BURN_SETTINGS_CMD]);
         } else {
@@ -764,10 +877,38 @@ mod tests {
         // Test burning config
         AS5600Interface::permanent_burn_config(&mut driver, token).unwrap();
         let log = mock.mock_get_log();
-        assert_eq!(log.len(), 1);
-        if let MockTransaction::Write(reg, data) = &log[0] {
+        // 1 Read (ZMCO) + 1 Read (MANG) + 1 Write (BURN) = 3
+        assert_eq!(log.len(), 3);
+        if let MockTransaction::Write(reg, data) = &log[2] {
             assert_eq!(*reg, regs::BURN);
             assert_eq!(data, &vec![regs::BURN_CONFIG_CMD]);
         }
+    }
+
+    #[test]
+    fn test_permanent_burn_config_forbidden_if_zmco_not_zero() {
+        let mock = AS5600Mock::new();
+        let mut driver = AS5600Driver::new(mock.clone());
+        let token = BurnToken::confirm_permanent_burn();
+
+        // Simulate that settings were already burned once (ZMCO = 1)
+        mock.mock_set_zmco(1);
+
+        // Attempt to burn config should fail
+        let result = AS5600Interface::permanent_burn_config(&mut driver, token);
+        assert!(matches!(result, Err(AS5600Error::OtpMaxBurnsReached)));
+    }
+
+    #[test]
+    fn test_permanent_burn_mang_too_small() {
+        let mock = AS5600Mock::new();
+        let mut driver = AS5600Driver::new(mock.clone());
+        let token = BurnToken::confirm_permanent_burn();
+
+        // 50 counts is approx 4.4 degrees (< 18)
+        mock.mock_set_mang(50);
+
+        let result = AS5600Interface::permanent_burn_config(&mut driver, token);
+        assert!(matches!(result, Err(AS5600Error::AngularTravelTooSmall)));
     }
 }

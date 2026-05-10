@@ -18,6 +18,10 @@ pub enum AS5600Error<E> {
     MagnetTooWeak,
     /// Magnetic field too strong (magnet is too close to the sensor).
     MagnetTooStrong,
+    /// The angular travel (range) is too small.
+    ///
+    /// The AS5600 requires a minimum travel of 18 degrees (~205 counts).
+    AngularTravelTooSmall,
 }
 
 impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
@@ -29,6 +33,9 @@ impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
             AS5600Error::MagnetMissing => write!(f, "Magnet not detected (missing)"),
             AS5600Error::MagnetTooWeak => write!(f, "Magnetic field too weak"),
             AS5600Error::MagnetTooStrong => write!(f, "Magnetic field too strong"),
+            AS5600Error::AngularTravelTooSmall => {
+                write!(f, "Angular travel is too small (min 18°)")
+            }
         }
     }
 }

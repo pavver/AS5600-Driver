@@ -146,6 +146,36 @@ impl AS5600Mock {
         state.registers[regs::MAGNITUDE_HI as usize] = bytes[0];
         state.registers[regs::MAGNITUDE_LO as usize] = bytes[1];
     }
+
+    /// Sets the simulated ZMCO (Burn Count) value.
+    pub fn mock_set_zmco(&self, count: u8) {
+        let mut state = self.state.lock().unwrap();
+        state.registers[regs::ZMCO as usize] = count & regs::ZMCO_MASK;
+    }
+
+    /// Sets the simulated ZPOS (Zero Position) value.
+    pub fn mock_set_zpos(&self, zpos: u16) {
+        let mut state = self.state.lock().unwrap();
+        let bytes = (zpos & regs::ZPOS_MASK).to_be_bytes();
+        state.registers[regs::ZPOS_HI as usize] = bytes[0];
+        state.registers[regs::ZPOS_LO as usize] = bytes[1];
+    }
+
+    /// Sets the simulated MPOS (Max Position) value.
+    pub fn mock_set_mpos(&self, mpos: u16) {
+        let mut state = self.state.lock().unwrap();
+        let bytes = (mpos & regs::MPOS_MASK).to_be_bytes();
+        state.registers[regs::MPOS_HI as usize] = bytes[0];
+        state.registers[regs::MPOS_LO as usize] = bytes[1];
+    }
+
+    /// Sets the simulated MANG (Max Angle) value.
+    pub fn mock_set_mang(&self, mang: u16) {
+        let mut state = self.state.lock().unwrap();
+        let bytes = (mang & regs::ANGLE_MASK).to_be_bytes();
+        state.registers[regs::MANG_HI as usize] = bytes[0];
+        state.registers[regs::MANG_LO as usize] = bytes[1];
+    }
 }
 
 impl embedded_hal::i2c::ErrorType for AS5600Mock {

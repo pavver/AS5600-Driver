@@ -15,6 +15,7 @@ pub struct AS5600Driver<I2C> {
 
 impl<I2C> AS5600Driver<I2C> {
     /// Creates a new driver instance with the default I2C address (0x36).
+    #[inline]
     pub fn new(i2c: I2C) -> Self {
         Self {
             i2c,
@@ -23,6 +24,7 @@ impl<I2C> AS5600Driver<I2C> {
     }
 
     /// Creates a new driver instance with a custom I2C address.
+    #[inline]
     pub fn with_address(i2c: I2C, address: u8) -> Self {
         Self { i2c, address }
     }
@@ -42,10 +44,12 @@ macro_rules! maybe_await {
 macro_rules! define_method {
     (async, $(#[$attr:meta])* $name:ident($($args:tt)*) -> $ret:ty { $($body:tt)* }) => {
         $(#[$attr])*
+        #[inline]
         async fn $name($($args)*) -> $ret { $($body)* }
     };
     (sync, $(#[$attr:meta])* $name:ident($($args:tt)*) -> $ret:ty { $($body:tt)* }) => {
         $(#[$attr])*
+        #[inline]
         fn $name($($args)*) -> $ret { $($body)* }
     };
 }
@@ -249,6 +253,31 @@ macro_rules! define_as5600_logic {
             }
         );
 
+        define_method!($mode,
+            /// Permanently burns ZPOS and MPOS settings to the chip.
+            permanent_burn_settings(
+                &mut self,
+                _token: BurnToken,
+            ) -> Result<(), AS5600Error<Self::Error>> {
+                let count = maybe_await!($mode, self.$u8(regs::ZMCO))? & regs::ZMCO_MASK;
+                if count >= 3 {
+                    return Err(AS5600Error::OtpMaxBurnsReached);
+                }
+                maybe_await!($mode, self.i2c.write(self.address, &[regs::BURN, regs::BURN_SETTINGS_CMD]))?;
+                Ok(())
+            }
+        );
+
+        define_method!($mode,
+            /// Permanently burns Configuration settings to the chip.
+            permanent_burn_config(
+                &mut self,
+                _token: BurnToken,
+            ) -> Result<(), AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.i2c.write(self.address, &[regs::BURN, regs::BURN_CONFIG_CMD]))?;
+                Ok(())
+            }
+        );
     };
 }
 
@@ -313,36 +342,6 @@ impl<I2C: i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
         read_u16_internal_reg,
         write_u16_internal
     );
-
-    /// Permanently burns ZPOS and MPOS settings to the chip.
-    ///
-    /// This requires a [`BurnToken`] to confirm the irreversible intent.
-    /// The AS5600 allows burning ZPOS/MPOS settings up to 3 times (see ZMCO).
-    pub fn permanent_burn_settings(
-        &mut self,
-        _token: BurnToken,
-    ) -> Result<(), AS5600Error<I2C::Error>> {
-        let count = AS5600Interface::get_burn_count(self)?;
-        if count >= 3 {
-            return Err(AS5600Error::OtpMaxBurnsReached);
-        }
-        self.i2c
-            .write(self.address, &[regs::BURN, regs::BURN_SETTINGS_CMD])?;
-        Ok(())
-    }
-
-    /// Permanently burns Configuration settings to the chip.
-    ///
-    /// This requires a [`BurnToken`] to confirm the irreversible intent.
-    /// The AS5600 allows burning the configuration **ONLY ONCE**.
-    pub fn permanent_burn_config(
-        &mut self,
-        _token: BurnToken,
-    ) -> Result<(), AS5600Error<I2C::Error>> {
-        self.i2c
-            .write(self.address, &[regs::BURN, regs::BURN_CONFIG_CMD])?;
-        Ok(())
-    }
 }
 
 // Generate Asynchronous implementation
@@ -725,6 +724,24 @@ mod tests {
                 100
             );
         }
+
+        #[tokio::test]
+        async fn test_permanent_burn_safety_async() {
+            let mock = AS5600Mock::new();
+            let mut driver = AS5600Driver::new(mock.clone());
+            let token = BurnToken::confirm_permanent_burn();
+
+            AS5600AsyncInterface::permanent_burn_settings(&mut driver, token)
+                .await
+                .unwrap();
+            let log = mock.mock_get_log();
+            assert_eq!(log.len(), 2);
+
+            AS5600AsyncInterface::permanent_burn_config(&mut driver, token)
+                .await
+                .unwrap();
+            assert_eq!(mock.mock_get_log().len(), 1);
+        }
     }
 
     #[test]
@@ -734,7 +751,7 @@ mod tests {
         let token = BurnToken::confirm_permanent_burn();
 
         // Test burning settings
-        driver.permanent_burn_settings(token).unwrap();
+        AS5600Interface::permanent_burn_settings(&mut driver, token).unwrap();
         let log = mock.mock_get_log();
         assert_eq!(log.len(), 2); // 1 Read (ZMCO) + 1 Write (BURN)
         if let MockTransaction::Write(reg, data) = &log[1] {
@@ -745,7 +762,7 @@ mod tests {
         }
 
         // Test burning config
-        driver.permanent_burn_config(token).unwrap();
+        AS5600Interface::permanent_burn_config(&mut driver, token).unwrap();
         let log = mock.mock_get_log();
         assert_eq!(log.len(), 1);
         if let MockTransaction::Write(reg, data) = &log[0] {

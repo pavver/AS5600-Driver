@@ -37,6 +37,7 @@ impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
 impl<E: fmt::Debug> std::error::Error for AS5600Error<E> {}
 
 impl<E> From<E> for AS5600Error<E> {
+    #[inline]
     fn from(e: E) -> Self {
         AS5600Error::I2c(e)
     }

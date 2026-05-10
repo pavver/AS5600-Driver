@@ -85,6 +85,24 @@ macro_rules! define_as5600_trait_methods {
 
         /// Reads all diagnostic data (Angle, Raw Angle, Status, AGC, Magnitude) in one optimized transaction.
         $($async)? fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>>;
+
+        /// Permanently burns ZPOS and MPOS settings to the chip.
+        ///
+        /// # Safety Warning
+        /// This operation is **irreversible**.
+        $($async)? fn permanent_burn_settings(
+            &mut self,
+            token: BurnToken,
+        ) -> Result<(), AS5600Error<Self::Error>>;
+
+        /// Permanently burns Configuration settings to the chip.
+        ///
+        /// # Safety Warning
+        /// This operation is **irreversible**.
+        $($async)? fn permanent_burn_config(
+            &mut self,
+            token: BurnToken,
+        ) -> Result<(), AS5600Error<Self::Error>>;
     };
 }
 

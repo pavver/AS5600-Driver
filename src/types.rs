@@ -20,6 +20,8 @@ impl BurnToken {
     /// # Safety Warning
     /// This operation is **irreversible**. Once burned, the settings cannot be changed
     /// back to the factory state. Ensure your configuration and positions are correct.
+    #[must_use]
+    #[inline]
     pub fn confirm_permanent_burn() -> Self {
         Self { _priv: () }
     }
@@ -172,11 +174,13 @@ pub struct Configuration {
 
 impl Configuration {
     /// Returns a new configuration builder.
+    #[inline]
     pub fn builder() -> ConfigurationBuilder {
         ConfigurationBuilder::new()
     }
 
     /// Creates a configuration from raw CONF_HI and CONF_LO register bytes.
+    #[inline]
     pub fn from_bytes(hi: u8, lo: u8) -> Self {
         Self {
             power_mode: match lo & CONF_PM_MASK {
@@ -223,6 +227,7 @@ impl Configuration {
     }
 
     /// Converts the configuration into raw (CONF_HI, CONF_LO) register bytes.
+    #[inline]
     pub fn to_bytes(&self) -> (u8, u8) {
         let hi = ((self.watchdog as u8) << 5)
             | ((self.fast_filter_threshold as u8) << 2)
@@ -253,53 +258,69 @@ pub struct ConfigurationBuilder {
 
 impl ConfigurationBuilder {
     /// Creates a new builder with no fields set.
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Sets the power consumption mode.
+    #[must_use]
+    #[inline]
     pub fn power_mode(mut self, mode: PowerMode) -> Self {
         self.power_mode = Some(mode);
         self
     }
 
     /// Sets the hysteresis level.
+    #[must_use]
+    #[inline]
     pub fn hysteresis(mut self, hysteresis: Hysteresis) -> Self {
         self.hysteresis = Some(hysteresis);
         self
     }
 
     /// Sets the output pin functionality.
+    #[must_use]
+    #[inline]
     pub fn output_stage(mut self, output_stage: OutputStage) -> Self {
         self.output_stage = Some(output_stage);
         self
     }
 
     /// Sets the PWM signal frequency.
+    #[must_use]
+    #[inline]
     pub fn pwm_frequency(mut self, frequency: PwmFrequency) -> Self {
         self.pwm_frequency = Some(frequency);
         self
     }
 
     /// Sets the slow filter averaging factor.
+    #[must_use]
+    #[inline]
     pub fn slow_filter(mut self, filter: SlowFilter) -> Self {
         self.slow_filter = Some(filter);
         self
     }
 
     /// Sets the fast filter threshold.
+    #[must_use]
+    #[inline]
     pub fn fast_filter_threshold(mut self, threshold: FastFilterThreshold) -> Self {
         self.fast_filter_threshold = Some(threshold);
         self
     }
 
     /// Enables or disables the watchdog timer.
+    #[must_use]
+    #[inline]
     pub fn watchdog(mut self, enabled: bool) -> Self {
         self.watchdog = Some(enabled);
         self
     }
 
     /// Checks if any field in the CONF_HI register (WD, FTH, SF) was modified.
+    #[inline]
     pub fn is_hi_dirty(&self) -> bool {
         self.watchdog.is_some()
             || self.fast_filter_threshold.is_some()
@@ -307,6 +328,7 @@ impl ConfigurationBuilder {
     }
 
     /// Checks if all fields in the CONF_HI register were modified (allowing direct write).
+    #[inline]
     pub fn is_hi_complete(&self) -> bool {
         self.watchdog.is_some()
             && self.fast_filter_threshold.is_some()
@@ -314,6 +336,7 @@ impl ConfigurationBuilder {
     }
 
     /// Checks if any field in the CONF_LO register (PWMF, OUTS, HYST, PM) was modified.
+    #[inline]
     pub fn is_lo_dirty(&self) -> bool {
         self.pwm_frequency.is_some()
             || self.output_stage.is_some()
@@ -322,6 +345,7 @@ impl ConfigurationBuilder {
     }
 
     /// Checks if all fields in the CONF_LO register were modified (allowing direct write).
+    #[inline]
     pub fn is_lo_complete(&self) -> bool {
         self.pwm_frequency.is_some()
             && self.output_stage.is_some()
@@ -330,6 +354,7 @@ impl ConfigurationBuilder {
     }
 
     /// Builds a full configuration using default values for unset fields.
+    #[inline]
     pub fn build(self) -> Configuration {
         let d = Configuration::default();
         Configuration {
@@ -346,6 +371,7 @@ impl ConfigurationBuilder {
     }
 
     /// Internal helper to calculate the byte for the CONF_HI register based on current value.
+    #[inline]
     pub(crate) fn calculate_hi(&self, current: u8) -> u8 {
         let mut val = current;
         if let Some(wd) = self.watchdog {
@@ -361,6 +387,7 @@ impl ConfigurationBuilder {
     }
 
     /// Internal helper to calculate the byte for the CONF_LO register based on current value.
+    #[inline]
     pub(crate) fn calculate_lo(&self, current: u8) -> u8 {
         let mut val = current;
         if let Some(pwmf) = self.pwm_frequency {
@@ -410,6 +437,7 @@ impl AngleWithStatus {
     ///
     /// # Errors
     /// Returns `Err(AS5600Error::MagnetMissing)` if the sensor does not detect a magnet.
+    #[inline]
     pub fn check_magnet_detected<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         if !self.status.detected {
             return Err(crate::error::AS5600Error::MagnetMissing);
@@ -421,6 +449,7 @@ impl AngleWithStatus {
     ///
     /// # Errors
     /// Returns `Err(AS5600Error::MagnetTooWeak)` if the magnetic field strength is below the threshold.
+    #[inline]
     pub fn check_magnet_not_too_weak<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         if self.status.too_weak {
             return Err(crate::error::AS5600Error::MagnetTooWeak);
@@ -432,6 +461,7 @@ impl AngleWithStatus {
     ///
     /// # Errors
     /// Returns `Err(AS5600Error::MagnetTooStrong)` if the magnetic field strength is above the threshold.
+    #[inline]
     pub fn check_magnet_not_too_strong<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         if self.status.too_strong {
             return Err(crate::error::AS5600Error::MagnetTooStrong);
@@ -449,6 +479,7 @@ impl AngleWithStatus {
     /// - [`AS5600Error::MagnetMissing`]
     /// - [`AS5600Error::MagnetTooWeak`]
     /// - [`AS5600Error::MagnetTooStrong`]
+    #[inline]
     pub fn check_magnet_all<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         self.check_magnet_detected()?
             .check_magnet_not_too_weak()?

@@ -593,6 +593,17 @@ mod tests {
 
         assert_eq!(result.angle, 2048);
         assert_eq!(result.status, status);
+
+        // Test fluent API checks
+        assert!(matches!(result.check_magnet_detected::<()>(), Ok(_)));
+        assert!(matches!(
+            result.check_magnet_not_too_weak::<()>(),
+            Err(AS5600Error::MagnetTooWeak)
+        ));
+        assert!(matches!(
+            result.check_magnet_all::<()>(),
+            Err(AS5600Error::MagnetTooWeak)
+        ));
     }
 
     #[cfg(feature = "async")]

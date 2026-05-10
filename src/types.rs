@@ -385,6 +385,48 @@ pub struct AngleWithStatus {
     pub status: MagnetStatus,
 }
 
+impl AngleWithStatus {
+    /// Checks if a magnet is detected.
+    ///
+    /// Returns `Err(AS5600Error::MagnetMissing)` if no magnet is found.
+    pub fn check_magnet_detected<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
+        if !self.status.detected {
+            return Err(crate::error::AS5600Error::MagnetMissing);
+        }
+        Ok(self)
+    }
+
+    /// Checks if the magnetic field is not too weak.
+    ///
+    /// Returns `Err(AS5600Error::MagnetTooWeak)` if the field is too weak.
+    pub fn check_magnet_not_too_weak<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
+        if self.status.too_weak {
+            return Err(crate::error::AS5600Error::MagnetTooWeak);
+        }
+        Ok(self)
+    }
+
+    /// Checks if the magnetic field is not too strong.
+    ///
+    /// Returns `Err(AS5600Error::MagnetTooStrong)` if the field is too strong.
+    pub fn check_magnet_not_too_strong<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
+        if self.status.too_strong {
+            return Err(crate::error::AS5600Error::MagnetTooStrong);
+        }
+        Ok(self)
+    }
+
+    /// Performs all magnet health checks in one call.
+    ///
+    /// Verifies that the magnet is detected and that the field strength is within
+    /// the recommended range (not too weak and not too strong).
+    pub fn check_magnet_all<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
+        self.check_magnet_detected()?
+            .check_magnet_not_too_weak()?
+            .check_magnet_not_too_strong()
+    }
+}
+
 /// A comprehensive snapshot of the sensor status and readings.
 ///
 /// This structure is used for optimized batch reading of all diagnostic

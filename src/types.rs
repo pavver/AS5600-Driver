@@ -1,3 +1,5 @@
+#[cfg(doc)]
+use crate::error::AS5600Error;
 use crate::regs::regs::*;
 
 /// A token required to perform permanent programming (burning) of the AS5600 chip.

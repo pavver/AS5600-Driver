@@ -10,6 +10,12 @@ keywords = ["AS5600", "encoder", "magnetic", "embedded-hal", "driver"]
 categories = ["embedded", "hardware-support", "no-std"]
 repository = "https://github.com/pavver/AS5600-Driver"
 
+[package.metadata.docs.rs]
+# Enable all features when building documentation on docs.rs
+all-features = true
+# Optional: defines the default target to build for
+default-target = "x86_64-unknown-linux-gnu"
+
 [features]
 # By default, we enable everything for testing and standard use.
 # For no_std use default-features = false.

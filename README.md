@@ -20,10 +20,11 @@ A comprehensive, low-level, platform-agnostic Rust driver for the **AS5600** mag
 - **Full Register Map**: Complete coverage of ZPOS, MPOS, MANG, CONF, STATUS, RAW_ANGLE, ANGLE, AGC, and MAGNITUDE.
 - **Hardware Configuration**: Support for Hysteresis, Power Modes, PWM settings, and Fast/Slow Filters.
 - **Diagnostics**: Methods to monitor magnet detection, magnetic field strength, and Automatic Gain Control (AGC).
-- **OTP Programming**: Secure methods for permanent burning of settings (marked `unsafe`).
-- **Asynchronous Support**: Full compatibility with `embedded-hal-async` 1.0 (behind the `async` feature).
-- **Batch Diagnostics**: Optimized transaction to read all sensor data in one go.
-- **Mocking Support**: Built-in hardware emulator for testing and simulation, including I2C bus failure simulation (behind the `mock` feature).
+- **OTP Programming**: Permanent burning of settings protected by a **Command Token** pattern to prevent accidental execution.
+- **Unified Async/Sync**: Identical logic for both modes thanks to internal macro unification. Full compatibility with `embedded-hal-async` 1.0.
+- **Optimized Reads**: Fetch both angle and magnet status in a single I2C transaction via `read_angle_with_status`.
+- **Fluent Validation**: Chainable health checks for magnet detection and field strength.
+- **Mocking Support**: Built-in hardware emulator for testing and simulation, including I2C bus failure simulation.
 - **defmt Support**: High-efficiency logging for embedded systems (behind the `defmt` feature).
 - **Smart Configuration**: Builder pattern with intelligent Read-Modify-Write logic to preserve unedited settings.
 - **Trait-based Interface**: `AS5600Interface` and `AS5600AsyncInterface` traits allow easy swapping between real hardware and mocks.
@@ -33,22 +34,34 @@ A comprehensive, low-level, platform-agnostic Rust driver for the **AS5600** mag
 Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
-# Basic no_std version
+# Standard version (includes async and mock support by default)
 AS5600-Driver = "0.1.2"
 
-# Or with async and std support
-AS5600-Driver = { version = "0.1.2", features = ["async", "std", "anyhow"] }
+# For minimal no_std binary size
+AS5600-Driver = { version = "0.1.2", default-features = false }
 ```
 
 ### ⚙️ Features
+- `async` (default): Enables asynchronous support using `embedded-hal-async`.
+- `mock` (default): Enables the hardware mock emulator (requires `std`).
 - `std`: Enables standard library support.
-- `async`: Enables asynchronous support using `embedded-hal-async`.
 - `anyhow`: Enables integration with `anyhow` crate for easier error handling (requires `std`).
-- `mock`: Enables the hardware mock emulator (requires `std`).
 - `defmt`: Enables `defmt::Format` implementation for all public structures.
 
 ## 🛠 Usage Examples
 
+### Single-Transaction Read with Validation (Recommended)
+This method is the most efficient and safest way to get data, as it verifies magnet health and reads the angle in one I2C go.
+
+```rust
+// Chainable validation: check if magnet exists and field strength is OK
+let result = encoder.read_angle_with_status()?
+    .check_magnet_all()?;
+
+println!("Angle: {}, Magnet Detected: {}", result.angle, result.status.detected);
+```
+
+### Manual Individual Reads
 ```rust
 let i2c = I2cdev::new("/dev/i2c-1")?;
 let mut encoder = AS5600Driver::new(i2c);
@@ -56,17 +69,8 @@ let mut encoder = AS5600Driver::new(i2c);
 let raw = encoder.read_raw_angle()?;
 let filtered = encoder.read_angle()?;
 let status = encoder.get_magnet_status()?;
-let status_raw = encoder.get_status_raw()?;
 let magnitude = encoder.get_magnitude()?;
 let agc = encoder.get_agc()?;
-
-// OR: Optimized batch reading (reads status, angle, agc, and magnitude in one go)
-/*
-let diag = encoder.read_all_diagnostics()?;
-let status = diag.magnet_status;
-let magnitude = diag.magnitude;
-let agc = diag.agc;
-*/
 
 let burn_count = encoder.get_burn_count()?;
 let conf = encoder.get_config()?;

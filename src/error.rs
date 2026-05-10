@@ -41,7 +41,7 @@ impl<E: fmt::Debug> fmt::Display for AS5600Error<E> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 impl<E: fmt::Debug> std::error::Error for AS5600Error<E> {}
 
 impl<E> From<E> for AS5600Error<E> {

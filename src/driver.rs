@@ -423,7 +423,7 @@ impl<I2C: async_i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
     );
 }
 
-#[cfg(all(test, feature = "mock"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::mock::{AS5600Mock, MockTransaction};

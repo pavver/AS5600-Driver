@@ -42,7 +42,7 @@
 #![no_std]
 #![allow(non_snake_case)]
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 extern crate std;
 
 pub mod driver;
@@ -51,7 +51,7 @@ pub mod regs;
 pub mod traits;
 pub mod types;
 
-#[cfg(feature = "mock")]
+#[cfg(any(feature = "mock", test))]
 pub mod mock;
 
 // Re-exports for convenience
@@ -63,5 +63,5 @@ pub use traits::AS5600AsyncInterface;
 pub use traits::AS5600Interface;
 pub use types::*;
 
-#[cfg(feature = "mock")]
+#[cfg(any(feature = "mock", test))]
 pub use mock::AS5600Mock;

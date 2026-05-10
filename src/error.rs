@@ -3,19 +3,20 @@ use core::fmt;
 /// Custom error type for the AS5600 driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AS5600Error<E> {
-    /// Error from the underlying I2C communication.
+    /// Error originating from the underlying I2C communication.
     I2c(E),
     /// The maximum number of permanent burns (ZMCO) has been reached.
     ///
-    /// For ZPOS/MPOS the limit is 3, for Configuration it is 1.
+    /// The AS5600 allows burning ZPOS/MPOS settings up to 3 times,
+    /// and the configuration register only once.
     OtpMaxBurnsReached,
-    /// Provided parameter is out of valid range (e.g. angle > 4095).
+    /// Provided parameter is out of the valid 12-bit range (0..4095).
     InvalidParameter,
-    /// Magnetic field not detected (magnet missing).
+    /// Magnetic field not detected (magnet is missing or misaligned).
     MagnetMissing,
-    /// Magnetic field too weak (magnet too far).
+    /// Magnetic field too weak (magnet is too far from the sensor).
     MagnetTooWeak,
-    /// Magnetic field too strong (magnet too close).
+    /// Magnetic field too strong (magnet is too close to the sensor).
     MagnetTooStrong,
 }
 

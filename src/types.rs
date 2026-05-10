@@ -4,6 +4,9 @@ use crate::regs::regs::*;
 ///
 /// This is a "Command Token" pattern that prevents accidental execution of irreversible
 /// operations. Burning can only be done a limited number of times (ZMCO limit).
+///
+/// The AS5600 allows burning the zero and maximum positions up to 3 times,
+/// while the configuration register can be burned only once.
 #[derive(Debug, Clone, Copy)]
 pub struct BurnToken {
     _priv: (),
@@ -28,17 +31,18 @@ impl BurnToken {
 pub enum PowerMode {
     /// No power saving, continuous sampling. (Current: ~6.5mA)
     Nominal = 0b00,
-    /// Low Power Mode 1 (Sampling: 1ms)
+    /// Low Power Mode 1 (Sampling: 1ms, Current: ~3.4mA)
     LPM1 = 0b01,
-    /// Low Power Mode 2 (Sampling: 10ms)
+    /// Low Power Mode 2 (Sampling: 10ms, Current: ~1.8mA)
     LPM2 = 0b10,
-    /// Low Power Mode 3 (Sampling: 100ms)
+    /// Low Power Mode 3 (Sampling: 100ms, Current: ~1.5mA)
     LPM3 = 0b11,
 }
 
 /// Hysteresis settings to suppress noise in the output.
 ///
-/// Defines the number of LSBs the position must change before the output is updated.
+/// Defines the number of Least Significant Bits (LSBs) the position must change
+/// before the output is updated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Hysteresis {
@@ -53,6 +57,9 @@ pub enum Hysteresis {
 }
 
 /// Output stage configuration for the OUT pin.
+///
+/// Determines whether the output pin behaves as an analog ratiometric voltage
+/// or as a Pulse Width Modulated (PWM) signal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum OutputStage {
@@ -81,6 +88,7 @@ pub enum PwmFrequency {
 /// Slow filter settings for noise reduction.
 ///
 /// Higher values mean more averaging and less noise, but higher step response time.
+/// Averaging is calculated over N consecutive samples.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SlowFilter {
@@ -122,20 +130,22 @@ pub enum FastFilterThreshold {
 /// Status of the magnetic system.
 ///
 /// Provides information about magnet detection and field strength.
+/// These values are read from the STATUS register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MagnetStatus {
-    /// True if a magnet is detected by the Hall sensors.
+    /// True if a magnet is detected by the Hall sensors (MD bit).
     pub detected: bool,
-    /// True if the magnetic field is too weak (magnet too far).
+    /// True if the magnetic field is too weak (ML bit).
     pub too_weak: bool,
-    /// True if the magnetic field is too strong (magnet too close).
+    /// True if the magnetic field is too strong (MH bit).
     pub too_strong: bool,
 }
 
 /// Full configuration of the AS5600 chip.
 ///
 /// This struct maps to the CONF_HI and CONF_LO registers.
+/// It contains settings for power consumption, filtering, and output behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Configuration {
@@ -151,7 +161,10 @@ pub struct Configuration {
     pub slow_filter: SlowFilter,
     /// Threshold for fast filter bypass.
     pub fast_filter_threshold: FastFilterThreshold,
-    /// Enable/Disable the watchdog timer (auto-low-power after 1 minute of inactivity).
+    /// Enable/Disable the watchdog timer.
+    ///
+    /// If enabled, the device enters Low Power Mode 3 after 1 minute of inactivity
+    /// (no I2C activity or position change).
     pub watchdog: bool,
 }
 
@@ -161,7 +174,7 @@ impl Configuration {
         ConfigurationBuilder::new()
     }
 
-    /// Creates a configuration from the raw CONF_HI and CONF_LO register bytes.
+    /// Creates a configuration from raw CONF_HI and CONF_LO register bytes.
     pub fn from_bytes(hi: u8, lo: u8) -> Self {
         Self {
             power_mode: match lo & CONF_PM_MASK {
@@ -221,6 +234,9 @@ impl Configuration {
 }
 
 /// A builder for the [`Configuration`] struct that tracks which fields were changed.
+///
+/// This allows performing partial updates to the sensor configuration, minimizing
+/// I2C traffic by only writing to registers that have actually changed.
 #[derive(Debug, Clone, Copy, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ConfigurationBuilder {
@@ -376,6 +392,8 @@ impl Default for Configuration {
 }
 
 /// Information about the current angle and magnet status.
+///
+/// This structure is returned by the optimized `read_angle_with_status` method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AngleWithStatus {
@@ -388,7 +406,8 @@ pub struct AngleWithStatus {
 impl AngleWithStatus {
     /// Checks if a magnet is detected.
     ///
-    /// Returns `Err(AS5600Error::MagnetMissing)` if no magnet is found.
+    /// # Errors
+    /// Returns `Err(AS5600Error::MagnetMissing)` if the sensor does not detect a magnet.
     pub fn check_magnet_detected<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         if !self.status.detected {
             return Err(crate::error::AS5600Error::MagnetMissing);
@@ -398,7 +417,8 @@ impl AngleWithStatus {
 
     /// Checks if the magnetic field is not too weak.
     ///
-    /// Returns `Err(AS5600Error::MagnetTooWeak)` if the field is too weak.
+    /// # Errors
+    /// Returns `Err(AS5600Error::MagnetTooWeak)` if the magnetic field strength is below the threshold.
     pub fn check_magnet_not_too_weak<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         if self.status.too_weak {
             return Err(crate::error::AS5600Error::MagnetTooWeak);
@@ -408,7 +428,8 @@ impl AngleWithStatus {
 
     /// Checks if the magnetic field is not too strong.
     ///
-    /// Returns `Err(AS5600Error::MagnetTooStrong)` if the field is too strong.
+    /// # Errors
+    /// Returns `Err(AS5600Error::MagnetTooStrong)` if the magnetic field strength is above the threshold.
     pub fn check_magnet_not_too_strong<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         if self.status.too_strong {
             return Err(crate::error::AS5600Error::MagnetTooStrong);
@@ -419,7 +440,13 @@ impl AngleWithStatus {
     /// Performs all magnet health checks in one call.
     ///
     /// Verifies that the magnet is detected and that the field strength is within
-    /// the recommended range (not too weak and not too strong).
+    /// the recommended range (neither too weak nor too strong).
+    ///
+    /// # Errors
+    /// Returns the first detected error from:
+    /// - [`AS5600Error::MagnetMissing`]
+    /// - [`AS5600Error::MagnetTooWeak`]
+    /// - [`AS5600Error::MagnetTooStrong`]
     pub fn check_magnet_all<E>(self) -> Result<Self, crate::error::AS5600Error<E>> {
         self.check_magnet_detected()?
             .check_magnet_not_too_weak()?
@@ -441,6 +468,8 @@ pub struct Diagnostics {
     /// Current health status of the magnetic system.
     pub magnet_status: MagnetStatus,
     /// Current Automatic Gain Control value (0..255).
+    ///
+    /// Lower values indicate a stronger magnetic field.
     pub agc: u8,
     /// Current magnitude of the magnetic field (12-bit).
     pub magnitude: u16,

@@ -199,7 +199,13 @@ macro_rules! define_as5600_logic {
         );
 
         define_method!($mode,
-            /// Reads both the 12-bit angle and magnet status in one optimized transaction.
+            /// Reads both the 12-bit angle and magnet status in one optimized I2C transaction.
+            ///
+            /// This is the most efficient way to read the angle while simultaneously
+            /// verifying that the magnet is present and within range.
+            ///
+            /// # Returns
+            /// An [`AngleWithStatus`] structure containing the filtered angle and magnet health.
             read_angle_with_status(&mut self) -> Result<AngleWithStatus, AS5600Error<Self::Error>> {
                 let mut buf = [0u8; 5];
                 maybe_await!($mode, self.i2c.write_read(self.address, &[regs::STATUS], &mut buf))?;
@@ -217,7 +223,10 @@ macro_rules! define_as5600_logic {
         );
 
         define_method!($mode,
-            /// Reads all diagnostic data in a single I2C transaction.
+            /// Reads all diagnostic and position data in a single I2C transaction.
+            ///
+            /// Fetches status, raw angle, filtered angle, AGC, and magnitude
+            /// (18 bytes total) from the sensor.
             read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
                 let mut buf = [0u8; 18];
                 maybe_await!($mode, self.i2c.write_read(self.address, &[regs::STATUS], &mut buf))?;
@@ -239,6 +248,7 @@ macro_rules! define_as5600_logic {
                 })
             }
         );
+
     };
 }
 

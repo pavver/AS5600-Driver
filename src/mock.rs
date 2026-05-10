@@ -16,39 +16,45 @@ impl embedded_hal::i2c::Error for MockError {
     }
 }
 
-/// Internal state shared between the mock I2C implementation and the controller.
+/// Internal state shared between the mock I2C implementation and the simulation controller.
 struct MockState {
     registers: [u8; 256],
     transaction_log: Vec<MockTransaction>,
     error_state: Option<MockError>,
 }
 
-/// Represents a single I2C transaction recorded by the mock.
+/// Represents a single I2C transaction recorded by the mock device.
+///
+/// This can be used in tests to verify that the driver is interacting with
+/// the hardware correctly (e.g., writing to the right registers).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MockTransaction {
-    /// A write operation: (register, data)
+    /// A write operation: (register_address, payload_data).
     Write(u8, Vec<u8>),
-    /// A write-read operation (typical for register reading): (register, bytes_read)
+    /// A write-read operation (typical for register reading): (register_address, number_of_bytes_read).
     WriteRead(u8, usize),
 }
 
-/// A mock I2C device that emulates AS5600 behavior.
+/// A mock I2C device that emulates the behavior of an AS5600 sensor.
 ///
-/// This mock allows you to test your application logic without real hardware.
-/// It implements `embedded-hal` I2C traits, so it can be passed to the `AS5600Driver`.
+/// This mock implements the `embedded-hal` and `embedded-hal-async` I2C traits,
+/// allowing it to be used as a drop-in replacement for a real sensor in unit tests.
 ///
-/// It also provides a "backdoor" API (`mock_set_*` methods) to change sensor values
-/// from other threads or from your test code, and a way to inspect I2C traffic.
+/// It provides a "Simulation Controller" API (methods starting with `mock_set_*`)
+/// to manipulate the simulated sensor state, and a transaction log to verify driver behavior.
 #[derive(Clone)]
 pub struct AS5600Mock {
     state: Arc<Mutex<MockState>>,
 }
 
 impl AS5600Mock {
-    /// Creates a new mock with a healthy default state.
-    /// - Magnet detected
-    /// - AGC at 100
-    /// - Watchdog enabled
+    /// Creates a new mock with a healthy default sensor state.
+    ///
+    /// Default state:
+    /// - Magnet is detected.
+    /// - AGC level is at 100.
+    /// - Watchdog timer is enabled.
+    /// - All positions and angles are zeroed.
     pub fn new() -> Self {
         let mut registers = [0u8; 256];
         // Default healthy state
@@ -66,18 +72,22 @@ impl AS5600Mock {
     }
 
     /// Forces the mock to return an error on all subsequent I2C operations.
+    ///
+    /// Use this to test the driver's error handling and recovery logic.
     pub fn mock_set_error(&self, error: Option<MockError>) {
         let mut state = self.state.lock().unwrap();
         state.error_state = error;
     }
 
     /// Returns the recorded transaction log and clears it.
+    ///
+    /// Use this to assert that specific I2C commands were sent by the driver.
     pub fn mock_get_log(&self) -> Vec<MockTransaction> {
         let mut state = self.state.lock().unwrap();
         std::mem::take(&mut state.transaction_log)
     }
 
-    /// Resets the transaction log.
+    /// Resets the transaction log without returning its content.
     pub fn mock_clear_log(&self) {
         let mut state = self.state.lock().unwrap();
         state.transaction_log.clear();
@@ -85,7 +95,9 @@ impl AS5600Mock {
 
     // --- Simulation Controller API ---
 
-    /// Sets the raw angle that the mock will report.
+    /// Sets the raw angle (RAW_ANGLE registers) that the mock will report.
+    ///
+    /// The value will be masked to 12 bits (0..4095).
     pub fn mock_set_raw_angle(&self, angle: u16) {
         let mut state = self.state.lock().unwrap();
         let bytes = (angle & regs::ANGLE_MASK).to_be_bytes();
@@ -93,7 +105,9 @@ impl AS5600Mock {
         state.registers[regs::RAW_ANGLE_LO as usize] = bytes[1];
     }
 
-    /// Sets the filtered angle that the mock will report.
+    /// Sets the filtered angle (ANGLE registers) that the mock will report.
+    ///
+    /// The value will be masked to 12 bits (0..4095).
     pub fn mock_set_angle(&self, angle: u16) {
         let mut state = self.state.lock().unwrap();
         let bytes = (angle & regs::ANGLE_MASK).to_be_bytes();
@@ -101,7 +115,7 @@ impl AS5600Mock {
         state.registers[regs::ANGLE_LO as usize] = bytes[1];
     }
 
-    /// Sets the magnet status that the mock will report.
+    /// Sets the magnet status that the mock will report via the STATUS register.
     pub fn mock_set_status(&self, status: MagnetStatus) {
         let mut state = self.state.lock().unwrap();
         let mut val = 0u8;
@@ -117,13 +131,15 @@ impl AS5600Mock {
         state.registers[regs::STATUS as usize] = val;
     }
 
-    /// Sets the Automatic Gain Control (AGC) value.
+    /// Sets the Automatic Gain Control (AGC) value (0..255).
     pub fn mock_set_agc(&self, agc: u8) {
         let mut state = self.state.lock().unwrap();
         state.registers[regs::AGC as usize] = agc;
     }
 
-    /// Sets the internal magnitude value.
+    /// Sets the simulated internal magnitude of the magnetic field.
+    ///
+    /// The value will be masked to 12 bits (0..4095).
     pub fn mock_set_magnitude(&self, magnitude: u16) {
         let mut state = self.state.lock().unwrap();
         let bytes = (magnitude & regs::ANGLE_MASK).to_be_bytes();

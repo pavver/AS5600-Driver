@@ -1,31 +1,42 @@
 //! # AS5600 Driver
 //!
 //! A platform-agnostic Rust driver for the AS5600 magnetic rotary encoder,
-//! based on the `embedded-hal` traits.
+//! compatible with `embedded-hal` 1.0 and `embedded-hal-async`.
 //!
-//! The AS5600 is a contactless magnetic rotary encoder with high-resolution 12-bit
-//! contactless on-axis angular position measurement over a full turn of 360°.
+//! The AS5600 is a high-resolution 12-bit contactless magnetic rotary encoder.
+//! It can measure angular position over a full 360° turn and provides digital
+//! output via I2C, as well as programmable PWM or analog output.
 //!
-//! ## Features
-//! - Read raw and filtered angle (12-bit resolution)
-//! - Configure power modes, hysteresis, and filters
-//! - Read magnet status (detected, too weak, too strong)
-//! - Automatic Gain Control (AGC) and Magnitude reading
-//! - Programming support (ZPOS, MPOS, MANG, and permanent BURN)
-//! - Mock driver for testing and simulation
+//! ## Core Features
 //!
-//! ## Example (ESP32)
+//! * **Flexible IO**: Supports both synchronous (`AS5600Interface`) and asynchronous (`AS5600AsyncInterface`) I2C communication.
+//! * **Optimized Reads**: Fetch both angle and magnet status in a single I2C transaction via `read_angle_with_status`.
+//! * **Rich Configuration**: Full control over power modes, hysteresis, filter settings, and output stages.
+//! * **Permanent Programming**: Supports one-time-programmable (OTP) burning of configuration and zero/max positions with safety tokens.
+//! * **Diagnostics**: Detailed reporting of magnetic field strength (too weak, too strong) and AGC levels.
+//! * **Testing**: Includes a comprehensive `AS5600Mock` for simulation and unit testing.
+//!
+//! ## Quick Start
+//!
 //! ```rust,ignore
-//! use AS5600_Driver::{AS5600Driver, AS5600Interface};
+//! use AS5600_Driver::{AS5600Driver, AS5600Interface, Configuration, PowerMode};
 //!
-//! // Setup I2C from your HAL
+//! // Provide your I2C peripheral from a HAL
 //! let i2c = ...;
-//! let mut sensor = AS5600Driver::new(i2c);
+//! let mut encoder = AS5600Driver::new(i2c);
 //!
-//! match sensor.read_angle() {
-//!     Ok(angle) => println!("Angle: {}", angle),
-//!     Err(e) => eprintln!("Error: {:?}", e),
-//! }
+//! // Simple angle reading with health check
+//! let result = encoder.read_angle_with_status()?
+//!     .check_magnet_all()?;
+//!
+//! println!("Current angle: {}", result.angle);
+//!
+//! // Dynamic configuration
+//! encoder.apply_config(
+//!     Configuration::builder()
+//!         .power_mode(PowerMode::LPM1)
+//!         .watchdog(false)
+//! )?;
 //! ```
 
 #![no_std]

@@ -70,7 +70,11 @@ println!("Angle: {}, Magnet Detected: {}", result.angle, result.status.detected)
 ### Manual Individual Reads
 ```rust
 let i2c = I2cdev::new("/dev/i2c-1")?;
+// Use default address (0x36)
 let mut encoder = AS5600Driver::new(i2c);
+
+// OR use a custom address (useful for AS5600L)
+// let mut encoder = AS5600Driver::with_address(i2c, 0x42);
 
 let raw = encoder.read_raw_angle()?;
 let filtered = encoder.read_angle()?;

@@ -1,7 +1,11 @@
-# AS5600 Driver (Rust)
+# AS5600_Driver
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Crates.io](https://img.shields.io/crates/v/AS5600-Driver.svg)](https://crates.io/crates/AS5600-Driver)
+[![Docs.rs](https://docs.rs/AS5600-Driver/badge.svg)](https://docs.rs/AS5600-Driver)
+[![Rust CI](https://github.com/pavver/AS5600-Driver/actions/workflows/ci.yml/badge.svg)](https://github.com/pavver/AS5600-Driver/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#-license)
+[![no_std](https://img.shields.io/badge/rust-no__std-orange.svg)](https://docs.rs/AS5600-Driver)
+[![embedded-hal](https://img.shields.io/badge/embedded--hal-1.0-green.svg)](https://github.com/rust-embedded/embedded-hal)
 
 A comprehensive, low-level, platform-agnostic Rust driver for the **AS5600** magnetic rotary encoder (12-bit contactless potentiometer). Built on **`embedded-hal` 1.0**, it provides direct access to all device registers and OTP programming functions.
 

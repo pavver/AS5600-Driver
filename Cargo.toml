@@ -3,12 +3,13 @@ name = "AS5600-Driver"
 version = "0.1.2"
 edition = "2024"
 authors = ["pavver <pavvers1@gmail.com>"]
-description = "A platform-agnostic driver for the AS5600 magnetic rotary encoder using embedded-hal."
+description = "Modern, platform-agnostic Rust driver for the AS5600 magnetic rotary encoder. Supports embedded-hal 1.0 sync/async, smart I2C optimization, and safe OTP programming. 100% no_std compatible."
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["AS5600", "encoder", "magnetic", "embedded-hal", "driver"]
+keywords = ["AS5600", "encoder", "magnetic", "embedded-hal", "async"]
 categories = ["embedded", "hardware-support", "no-std"]
 repository = "https://github.com/pavver/AS5600-Driver"
+documentation = "https://docs.rs/AS5600-Driver"
 
 [lib]
 name = "AS5600_Driver"

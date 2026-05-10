@@ -10,6 +10,9 @@ keywords = ["AS5600", "encoder", "magnetic", "embedded-hal", "driver"]
 categories = ["embedded", "hardware-support", "no-std"]
 repository = "https://github.com/pavver/AS5600-Driver"
 
+[lib]
+name = "AS5600_Driver"
+
 [package.metadata.docs.rs]
 # Enable all features when building documentation on docs.rs
 all-features = true
@@ -17,9 +20,9 @@ all-features = true
 default-target = "x86_64-unknown-linux-gnu"
 
 [features]
-# By default, we enable everything for testing and standard use.
-# For no_std use default-features = false.
-default = ["mock", "async"]
+# By default, we provide a minimal synchronous driver.
+# Enable 'async' for embedded-hal-async support.
+default = []
 # Enables standard library support (for error trait etc.)
 std = []
 # Enables anyhow integration (requires std)
@@ -35,7 +38,7 @@ defmt = ["dep:defmt"]
 embedded-hal = "1.0"
 embedded-hal-async = { version = "1.0", optional = true }
 anyhow = { version = "1.0", optional = true }
-defmt = { version = "0.3", optional = true }
+defmt = { version = "1.0.1", optional = true }
 
 [dev-dependencies]
-tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }

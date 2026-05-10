@@ -2,6 +2,7 @@ use core::fmt;
 
 /// Custom error type for the AS5600 driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AS5600Error<E> {
     /// Error originating from the underlying I2C communication.
     I2c(E),

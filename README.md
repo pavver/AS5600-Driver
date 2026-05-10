@@ -34,18 +34,18 @@ A comprehensive, low-level, platform-agnostic Rust driver for the **AS5600** mag
 Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
-# Standard version (includes async and mock support by default)
+# Minimal synchronous version (no-std compatible by default)
 AS5600-Driver = "0.1.2"
 
-# For minimal no_std binary size
-AS5600-Driver = { version = "0.1.2", default-features = false }
+# Full version with async and mock support
+AS5600-Driver = { version = "0.1.2", features = ["async", "mock"] }
 ```
 
 ### ⚙️ Features
-- `async` (default): Enables asynchronous support using `embedded-hal-async`.
-- `mock` (default): Enables the hardware mock emulator (requires `std`).
+- `async`: Enables asynchronous support using `embedded-hal-async`.
+- `mock`: Enables the hardware mock emulator (requires `std`).
 - `std`: Enables standard library support.
-- `anyhow`: Enables integration with `anyhow` crate for easier error handling (requires `std`).
+- `anyhow`: Enables integration with `anyhow` crate (requires `std`).
 - `defmt`: Enables `defmt::Format` implementation for all public structures.
 
 ## 🛠 Usage Examples

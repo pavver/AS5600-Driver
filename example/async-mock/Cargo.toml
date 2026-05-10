@@ -8,4 +8,4 @@ publish = false
 # We point to the local crate with 'async' and 'mock' features
 AS5600-Driver = { path = "../../", features = ["async", "mock", "anyhow"] }
 anyhow = "1.0"
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.52.3", features = ["full"] }

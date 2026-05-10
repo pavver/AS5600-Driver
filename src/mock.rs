@@ -93,6 +93,14 @@ impl AS5600Mock {
         state.registers[regs::RAW_ANGLE_LO as usize] = bytes[1];
     }
 
+    /// Sets the filtered angle that the mock will report.
+    pub fn mock_set_angle(&self, angle: u16) {
+        let mut state = self.state.lock().unwrap();
+        let bytes = (angle & regs::ANGLE_MASK).to_be_bytes();
+        state.registers[regs::ANGLE_HI as usize] = bytes[0];
+        state.registers[regs::ANGLE_LO as usize] = bytes[1];
+    }
+
     /// Sets the magnet status that the mock will report.
     pub fn mock_set_status(&self, status: MagnetStatus) {
         let mut state = self.state.lock().unwrap();

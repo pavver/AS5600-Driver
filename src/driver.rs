@@ -28,363 +28,281 @@ impl<I2C> AS5600Driver<I2C> {
     }
 }
 
-macro_rules! define_as5600_methods {
-    ($($is_async:ident)?) => {
-        define_as5600_methods!(@meth $($is_async)?);
+/// Internal macro to handle optional await.
+macro_rules! maybe_await {
+    (async, $e:expr) => {
+        $e.await
     };
-    (@meth async) => {
-        /// Reads the raw angle from the sensor (12-bit).
-        async fn read_raw_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_async().await
-        }
-
-        /// Reads the angle from the sensor (12-bit).
-        async fn read_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg_async(regs::ANGLE_HI).await
-        }
-
-        /// Gets the current burn count (ZMCO).
-        async fn get_burn_count(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
-            let val = self.read_u8_internal_async(regs::ZMCO).await?;
-            Ok(val & regs::ZMCO_MASK)
-        }
-
-        /// Reads the raw status register byte.
-        async fn get_status_raw(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
-            self.read_u8_internal_async(regs::STATUS).await
-        }
-
-        /// Gets the magnet status (detected, weak, strong).
-        async fn get_magnet_status(&mut self) -> Result<MagnetStatus, AS5600Error<Self::Error>> {
-            let val = self.read_u8_internal_async(regs::STATUS).await?;
-            Ok(MagnetStatus {
-                detected: (val & regs::STATUS_MD_MASK) != 0,
-                too_weak: (val & regs::STATUS_ML_MASK) != 0,
-                too_strong: (val & regs::STATUS_MH_MASK) != 0,
-            })
-        }
-
-        /// Gets the current magnitude of the magnetic field (12-bit).
-        async fn get_magnitude(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg_async(regs::MAGNITUDE_HI).await
-        }
-
-        /// Gets the current AGC value.
-        async fn get_agc(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
-            self.read_u8_internal_async(regs::AGC).await
-        }
-
-        /// Reads the full configuration from the sensor.
-        async fn get_config(&mut self) -> Result<Configuration, AS5600Error<Self::Error>> {
-            let mut buf = [0u8; 2];
-            self.i2c.write_read(self.address, &[regs::CONF_HI], &mut buf).await?;
-            Ok(Configuration::from_bytes(buf[0], buf[1]))
-        }
-
-        /// Writes a complete configuration to the sensor.
-        async fn set_config(&mut self, config: Configuration) -> Result<(), AS5600Error<Self::Error>> {
-            let (hi, lo) = config.to_bytes();
-            self.i2c.write(self.address, &[regs::CONF_HI, hi, lo]).await?;
-            Ok(())
-        }
-
-        /// Applies configuration changes using a builder pattern.
-        ///
-        /// Only modified fields are updated. If a register is partially modified,
-        /// its current value is read from the sensor before writing.
-        async fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>> {
-            if builder.is_hi_dirty() {
-                let hi_val = if builder.is_hi_complete() {
-                    builder.calculate_hi(0)
-                } else {
-                    builder.calculate_hi(self.read_u8_internal_async(regs::CONF_HI).await?)
-                };
-                self.i2c.write(self.address, &[regs::CONF_HI, hi_val]).await?;
-            }
-            if builder.is_lo_dirty() {
-                let lo_val = if builder.is_lo_complete() {
-                    builder.calculate_lo(0)
-                } else {
-                    builder.calculate_lo(self.read_u8_internal_async(regs::CONF_LO).await?)
-                };
-                self.i2c.write(self.address, &[regs::CONF_LO, lo_val]).await?;
-            }
-            Ok(())
-        }
-
-        /// Gets the programmed zero position (ZPOS).
-        async fn get_zero_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg_async(regs::ZPOS_HI).await
-        }
-
-        /// Sets the zero position (ZPOS).
-        async fn set_zero_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-            self.write_u16_internal_async(regs::ZPOS_HI, angle).await
-        }
-
-        /// Gets the programmed max position (MPOS).
-        async fn get_max_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg_async(regs::MPOS_HI).await
-        }
-
-        /// Sets the max position (MPOS).
-        async fn set_max_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-            self.write_u16_internal_async(regs::MPOS_HI, angle).await
-        }
-
-        /// Gets the programmed max angle (MANG).
-        async fn get_max_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg_async(regs::MANG_HI).await
-        }
-
-        /// Sets the max angle (MANG).
-        async fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-            self.write_u16_internal_async(regs::MANG_HI, angle).await
-        }
-
-        /// Checks if the sensor is connected by attempting to read ZMCO.
-        async fn is_connected(&mut self) -> bool {
-            self.read_u8_internal_async(regs::ZMCO).await.is_ok()
-        }
-
-        /// Reads all diagnostic data in a single I2C transaction.
-        async fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
-            let mut buf = [0u8; 18];
-            self.i2c.write_read(self.address, &[regs::STATUS], &mut buf).await?;
-            let status_val = buf[0];
-            let raw_angle = u16::from_be_bytes([buf[regs::RAW_ANGLE_OFFSET], buf[regs::RAW_ANGLE_OFFSET + 1]]) & regs::ANGLE_MASK;
-            let angle = u16::from_be_bytes([buf[regs::ANGLE_OFFSET], buf[regs::ANGLE_OFFSET + 1]]) & regs::ANGLE_MASK;
-            let agc = buf[regs::AGC_OFFSET];
-            let magnitude = u16::from_be_bytes([buf[regs::MAGNITUDE_OFFSET], buf[regs::MAGNITUDE_OFFSET + 1]]) & regs::ANGLE_MASK;
-            Ok(Diagnostics {
-                angle,
-                raw_angle,
-                magnet_status: MagnetStatus {
-                    detected: (status_val & regs::STATUS_MD_MASK) != 0,
-                    too_weak: (status_val & regs::STATUS_ML_MASK) != 0,
-                    too_strong: (status_val & regs::STATUS_MH_MASK) != 0,
-                },
-                agc,
-                magnitude,
-            })
-        }
-    };
-    (@meth) => {
-        /// Reads the raw angle from the sensor (12-bit).
-        fn read_raw_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal()
-        }
-
-        /// Reads the angle from the sensor (12-bit).
-        fn read_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg(regs::ANGLE_HI)
-        }
-
-        /// Gets the current burn count (ZMCO).
-        fn get_burn_count(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
-            let val = self.read_u8_internal(regs::ZMCO)?;
-            Ok(val & regs::ZMCO_MASK)
-        }
-
-        /// Reads the raw status register byte.
-        fn get_status_raw(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
-            self.read_u8_internal(regs::STATUS)
-        }
-
-        /// Gets the magnet status (detected, weak, strong).
-        fn get_magnet_status(&mut self) -> Result<MagnetStatus, AS5600Error<Self::Error>> {
-            let val = self.read_u8_internal(regs::STATUS)?;
-            Ok(MagnetStatus {
-                detected: (val & regs::STATUS_MD_MASK) != 0,
-                too_weak: (val & regs::STATUS_ML_MASK) != 0,
-                too_strong: (val & regs::STATUS_MH_MASK) != 0,
-            })
-        }
-
-        /// Gets the current magnitude of the magnetic field (12-bit).
-        fn get_magnitude(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg(regs::MAGNITUDE_HI)
-        }
-
-        /// Gets the current AGC value.
-        fn get_agc(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
-            self.read_u8_internal(regs::AGC)
-        }
-
-        /// Reads the full configuration from the sensor.
-        fn get_config(&mut self) -> Result<Configuration, AS5600Error<Self::Error>> {
-            let mut buf = [0u8; 2];
-            self.i2c.write_read(self.address, &[regs::CONF_HI], &mut buf)?;
-            Ok(Configuration::from_bytes(buf[0], buf[1]))
-        }
-
-        /// Writes a complete configuration to the sensor.
-        fn set_config(&mut self, config: Configuration) -> Result<(), AS5600Error<Self::Error>> {
-            let (hi, lo) = config.to_bytes();
-            self.i2c.write(self.address, &[regs::CONF_HI, hi, lo])?;
-            Ok(())
-        }
-
-        /// Applies configuration changes using a builder pattern.
-        ///
-        /// Only modified fields are updated. If a register is partially modified,
-        /// its current value is read from the sensor before writing.
-        fn apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>> {
-            if builder.is_hi_dirty() {
-                let hi_val = if builder.is_hi_complete() {
-                    builder.calculate_hi(0)
-                } else {
-                    builder.calculate_hi(self.read_u8_internal(regs::CONF_HI)?)
-                };
-                self.i2c.write(self.address, &[regs::CONF_HI, hi_val])?;
-            }
-            if builder.is_lo_dirty() {
-                let lo_val = if builder.is_lo_complete() {
-                    builder.calculate_lo(0)
-                } else {
-                    builder.calculate_lo(self.read_u8_internal(regs::CONF_LO)?)
-                };
-                self.i2c.write(self.address, &[regs::CONF_LO, lo_val])?;
-            }
-            Ok(())
-        }
-
-        /// Gets the programmed zero position (ZPOS).
-        fn get_zero_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg(regs::ZPOS_HI)
-        }
-
-        /// Sets the zero position (ZPOS).
-        fn set_zero_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-            self.write_u16_internal(regs::ZPOS_HI, angle)
-        }
-
-        /// Gets the programmed max position (MPOS).
-        fn get_max_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg(regs::MPOS_HI)
-        }
-
-        /// Sets the max position (MPOS).
-        fn set_max_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-            self.write_u16_internal(regs::MPOS_HI, angle)
-        }
-
-        /// Gets the programmed max angle (MANG).
-        fn get_max_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
-            self.read_u16_internal_reg(regs::MANG_HI)
-        }
-
-        /// Sets the max angle (MANG).
-        fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
-            self.write_u16_internal(regs::MANG_HI, angle)
-        }
-
-        /// Checks if the sensor is connected by attempting to read ZMCO.
-        fn is_connected(&mut self) -> bool {
-            self.read_u8_internal(regs::ZMCO).is_ok()
-        }
-
-        /// Reads all diagnostic data in a single I2C transaction.
-        fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
-            let mut buf = [0u8; 18];
-            self.i2c.write_read(self.address, &[regs::STATUS], &mut buf)?;
-            let status_val = buf[0];
-            let raw_angle = u16::from_be_bytes([buf[regs::RAW_ANGLE_OFFSET], buf[regs::RAW_ANGLE_OFFSET + 1]]) & regs::ANGLE_MASK;
-            let angle = u16::from_be_bytes([buf[regs::ANGLE_OFFSET], buf[regs::ANGLE_OFFSET + 1]]) & regs::ANGLE_MASK;
-            let agc = buf[regs::AGC_OFFSET];
-            let magnitude = u16::from_be_bytes([buf[regs::MAGNITUDE_OFFSET], buf[regs::MAGNITUDE_OFFSET + 1]]) & regs::ANGLE_MASK;
-            Ok(Diagnostics {
-                angle,
-                raw_angle,
-                magnet_status: MagnetStatus {
-                    detected: (status_val & regs::STATUS_MD_MASK) != 0,
-                    too_weak: (status_val & regs::STATUS_ML_MASK) != 0,
-                    too_strong: (status_val & regs::STATUS_MH_MASK) != 0,
-                },
-                agc,
-                magnitude,
-            })
-        }
+    (sync, $e:expr) => {
+        $e
     };
 }
 
-macro_rules! define_internal_helpers {
-    ($($is_async:ident)?) => {
-        define_internal_helpers!(@meth $($is_async)?);
+/// Internal macro to define either a sync or async function.
+macro_rules! define_method {
+    (async, $(#[$attr:meta])* $name:ident($($args:tt)*) -> $ret:ty { $($body:tt)* }) => {
+        $(#[$attr])*
+        async fn $name($($args)*) -> $ret { $($body)* }
     };
-    (@meth async) => {
-        /// Internal helper to read a single byte from a register (async).
-        async fn read_u8_internal_async(&mut self, reg: u8) -> Result<u8, AS5600Error<I2C::Error>> {
-            let mut buf = [0u8; 1];
-            self.i2c.write_read(self.address, &[reg], &mut buf).await?;
-            Ok(buf[0])
-        }
-
-        /// Internal helper to read a 12-bit value from RAW_ANGLE_HI (async).
-        async fn read_u16_internal_async(&mut self) -> Result<u16, AS5600Error<I2C::Error>> {
-            let mut buf = [0u8; 2];
-            self.i2c.write_read(self.address, &[regs::RAW_ANGLE_HI], &mut buf).await?;
-            Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
-        }
-
-        /// Internal helper to read a 12-bit value from a custom register (async).
-        async fn read_u16_internal_reg_async(&mut self, reg: u8) -> Result<u16, AS5600Error<I2C::Error>> {
-            let mut buf = [0u8; 2];
-            self.i2c.write_read(self.address, &[reg], &mut buf).await?;
-            Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
-        }
-
-        /// Internal helper to write a 12-bit value to two consecutive registers (async).
-        async fn write_u16_internal_async(&mut self, reg_hi: u8, value: u16) -> Result<(), AS5600Error<I2C::Error>> {
-            if value > regs::ANGLE_MASK {
-                return Err(AS5600Error::InvalidParameter);
-            }
-            let bytes = value.to_be_bytes();
-            self.i2c.write(self.address, &[reg_hi, bytes[0], bytes[1]]).await?;
-            Ok(())
-        }
-    };
-    (@meth) => {
-        /// Internal helper to read a single byte from a register.
-        fn read_u8_internal(&mut self, reg: u8) -> Result<u8, AS5600Error<I2C::Error>> {
-            let mut buf = [0u8; 1];
-            self.i2c.write_read(self.address, &[reg], &mut buf)?;
-            Ok(buf[0])
-        }
-
-        /// Internal helper to read a 12-bit value from RAW_ANGLE_HI.
-        fn read_u16_internal(&mut self) -> Result<u16, AS5600Error<I2C::Error>> {
-            let mut buf = [0u8; 2];
-            self.i2c.write_read(self.address, &[regs::RAW_ANGLE_HI], &mut buf)?;
-            Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
-        }
-
-        /// Internal helper to read a 12-bit value from a custom register.
-        fn read_u16_internal_reg(&mut self, reg: u8) -> Result<u16, AS5600Error<I2C::Error>> {
-            let mut buf = [0u8; 2];
-            self.i2c.write_read(self.address, &[reg], &mut buf)?;
-            Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
-        }
-
-        /// Internal helper to write a 12-bit value to two consecutive registers.
-        fn write_u16_internal(&mut self, reg_hi: u8, value: u16) -> Result<(), AS5600Error<I2C::Error>> {
-            if value > regs::ANGLE_MASK {
-                return Err(AS5600Error::InvalidParameter);
-            }
-            let bytes = value.to_be_bytes();
-            self.i2c.write(self.address, &[reg_hi, bytes[0], bytes[1]])?;
-            Ok(())
-        }
+    (sync, $(#[$attr:meta])* $name:ident($($args:tt)*) -> $ret:ty { $($body:tt)* }) => {
+        $(#[$attr])*
+        fn $name($($args)*) -> $ret { $($body)* }
     };
 }
 
+/// Unified logic for all AS5600 methods.
+macro_rules! define_as5600_logic {
+    ($mode:ident, $u8:ident, $u16:ident, $u16_reg:ident, $write_u16:ident) => {
+        define_method!($mode,
+            /// Reads the raw angle from the sensor (12-bit).
+            read_raw_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u16())
+            }
+        );
+
+        define_method!($mode,
+            /// Reads the angle from the sensor (12-bit).
+            read_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u16_reg(regs::ANGLE_HI))
+            }
+        );
+
+        define_method!($mode,
+            /// Gets the current burn count (ZMCO).
+            get_burn_count(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
+                let val = maybe_await!($mode, self.$u8(regs::ZMCO))?;
+                Ok(val & regs::ZMCO_MASK)
+            }
+        );
+
+        define_method!($mode,
+            /// Reads the raw status register byte.
+            get_status_raw(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u8(regs::STATUS))
+            }
+        );
+
+        define_method!($mode,
+            /// Gets the magnet status (detected, weak, strong).
+            get_magnet_status(&mut self) -> Result<MagnetStatus, AS5600Error<Self::Error>> {
+                let val = maybe_await!($mode, self.$u8(regs::STATUS))?;
+                Ok(MagnetStatus {
+                    detected: (val & regs::STATUS_MD_MASK) != 0,
+                    too_weak: (val & regs::STATUS_ML_MASK) != 0,
+                    too_strong: (val & regs::STATUS_MH_MASK) != 0,
+                })
+            }
+        );
+
+        define_method!($mode,
+            /// Gets the current magnitude of the magnetic field (12-bit).
+            get_magnitude(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u16_reg(regs::MAGNITUDE_HI))
+            }
+        );
+
+        define_method!($mode,
+            /// Gets the current AGC value.
+            get_agc(&mut self) -> Result<u8, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u8(regs::AGC))
+            }
+        );
+
+        define_method!($mode,
+            /// Reads the full configuration from the sensor.
+            get_config(&mut self) -> Result<Configuration, AS5600Error<Self::Error>> {
+                let mut buf = [0u8; 2];
+                maybe_await!($mode, self.i2c.write_read(self.address, &[regs::CONF_HI], &mut buf))?;
+                Ok(Configuration::from_bytes(buf[0], buf[1]))
+            }
+        );
+
+        define_method!($mode,
+            /// Writes a complete configuration to the sensor.
+            set_config(&mut self, config: Configuration) -> Result<(), AS5600Error<Self::Error>> {
+                let (hi, lo) = config.to_bytes();
+                maybe_await!($mode, self.i2c.write(self.address, &[regs::CONF_HI, hi, lo]))?;
+                Ok(())
+            }
+        );
+
+        define_method!($mode,
+            /// Applies configuration changes using a builder pattern.
+            apply_config(&mut self, builder: ConfigurationBuilder) -> Result<(), AS5600Error<Self::Error>> {
+                if builder.is_hi_dirty() {
+                    let hi_val = if builder.is_hi_complete() {
+                        builder.calculate_hi(0)
+                    } else {
+                        builder.calculate_hi(maybe_await!($mode, self.$u8(regs::CONF_HI))?)
+                    };
+                    maybe_await!($mode, self.i2c.write(self.address, &[regs::CONF_HI, hi_val]))?;
+                }
+                if builder.is_lo_dirty() {
+                    let lo_val = if builder.is_lo_complete() {
+                        builder.calculate_lo(0)
+                    } else {
+                        builder.calculate_lo(maybe_await!($mode, self.$u8(regs::CONF_LO))?)
+                    };
+                    maybe_await!($mode, self.i2c.write(self.address, &[regs::CONF_LO, lo_val]))?;
+                }
+                Ok(())
+            }
+        );
+
+        define_method!($mode,
+            /// Gets the programmed zero position (ZPOS).
+            get_zero_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u16_reg(regs::ZPOS_HI))
+            }
+        );
+
+        define_method!($mode,
+            /// Sets the zero position (ZPOS).
+            set_zero_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$write_u16(regs::ZPOS_HI, angle))
+            }
+        );
+
+        define_method!($mode,
+            /// Gets the programmed max position (MPOS).
+            get_max_position(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u16_reg(regs::MPOS_HI))
+            }
+        );
+
+        define_method!($mode,
+            /// Sets the max position (MPOS).
+            set_max_position(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$write_u16(regs::MPOS_HI, angle))
+            }
+        );
+
+        define_method!($mode,
+            /// Gets the programmed max angle (MANG).
+            get_max_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$u16_reg(regs::MANG_HI))
+            }
+        );
+
+        define_method!($mode,
+            /// Sets the max angle (MANG).
+            set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>> {
+                maybe_await!($mode, self.$write_u16(regs::MANG_HI, angle))
+            }
+        );
+
+        define_method!($mode,
+            /// Checks if the sensor is connected by attempting to read ZMCO.
+            is_connected(&mut self) -> bool {
+                maybe_await!($mode, self.$u8(regs::ZMCO)).is_ok()
+            }
+        );
+
+        define_method!($mode,
+            /// Reads both the 12-bit angle and magnet status in one optimized transaction.
+            read_angle_with_status(&mut self) -> Result<AngleWithStatus, AS5600Error<Self::Error>> {
+                let mut buf = [0u8; 5];
+                maybe_await!($mode, self.i2c.write_read(self.address, &[regs::STATUS], &mut buf))?;
+                let status_val = buf[0];
+                let angle = u16::from_be_bytes([buf[3], buf[4]]) & regs::ANGLE_MASK;
+                Ok(AngleWithStatus {
+                    angle,
+                    status: MagnetStatus {
+                        detected: (status_val & regs::STATUS_MD_MASK) != 0,
+                        too_weak: (status_val & regs::STATUS_ML_MASK) != 0,
+                        too_strong: (status_val & regs::STATUS_MH_MASK) != 0,
+                    },
+                })
+            }
+        );
+
+        define_method!($mode,
+            /// Reads all diagnostic data in a single I2C transaction.
+            read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>> {
+                let mut buf = [0u8; 18];
+                maybe_await!($mode, self.i2c.write_read(self.address, &[regs::STATUS], &mut buf))?;
+                let status_val = buf[0];
+                let raw_angle = u16::from_be_bytes([buf[regs::RAW_ANGLE_OFFSET], buf[regs::RAW_ANGLE_OFFSET + 1]]) & regs::ANGLE_MASK;
+                let angle = u16::from_be_bytes([buf[regs::ANGLE_OFFSET], buf[regs::ANGLE_OFFSET + 1]]) & regs::ANGLE_MASK;
+                let agc = buf[regs::AGC_OFFSET];
+                let magnitude = u16::from_be_bytes([buf[regs::MAGNITUDE_OFFSET], buf[regs::MAGNITUDE_OFFSET + 1]]) & regs::ANGLE_MASK;
+                Ok(Diagnostics {
+                    angle,
+                    raw_angle,
+                    magnet_status: MagnetStatus {
+                        detected: (status_val & regs::STATUS_MD_MASK) != 0,
+                        too_weak: (status_val & regs::STATUS_ML_MASK) != 0,
+                        too_strong: (status_val & regs::STATUS_MH_MASK) != 0,
+                    },
+                    agc,
+                    magnitude,
+                })
+            }
+        );
+    };
+}
+
+/// Internal helpers definition logic.
+macro_rules! define_internal_helpers_logic {
+    ($mode:ident, $u8:ident, $u16:ident, $u16_reg:ident, $write_u16:ident) => {
+        define_method!($mode,
+            /// Internal helper to read a single byte from a register.
+            $u8(&mut self, reg: u8) -> Result<u8, AS5600Error<I2C::Error>> {
+                let mut buf = [0u8; 1];
+                maybe_await!($mode, self.i2c.write_read(self.address, &[reg], &mut buf))?;
+                Ok(buf[0])
+            }
+        );
+        define_method!($mode,
+            /// Internal helper to read a 12-bit value from RAW_ANGLE_HI.
+            $u16(&mut self) -> Result<u16, AS5600Error<I2C::Error>> {
+                let mut buf = [0u8; 2];
+                maybe_await!($mode, self.i2c.write_read(self.address, &[regs::RAW_ANGLE_HI], &mut buf))?;
+                Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
+            }
+        );
+        define_method!($mode,
+            /// Internal helper to read a 12-bit value from a custom register.
+            $u16_reg(&mut self, reg: u8) -> Result<u16, AS5600Error<I2C::Error>> {
+                let mut buf = [0u8; 2];
+                maybe_await!($mode, self.i2c.write_read(self.address, &[reg], &mut buf))?;
+                Ok(u16::from_be_bytes(buf) & regs::ANGLE_MASK)
+            }
+        );
+        define_method!($mode,
+            /// Internal helper to write a 12-bit value to two consecutive registers.
+            $write_u16(&mut self, reg_hi: u8, value: u16) -> Result<(), AS5600Error<I2C::Error>> {
+                if value > regs::ANGLE_MASK {
+                    return Err(AS5600Error::InvalidParameter);
+                }
+                let bytes = value.to_be_bytes();
+                maybe_await!($mode, self.i2c.write(self.address, &[reg_hi, bytes[0], bytes[1]]))?;
+                Ok(())
+            }
+        );
+    };
+}
+
+// Generate Synchronous implementation
 impl<I2C: i2c::I2c<SevenBitAddress>> AS5600Interface for AS5600Driver<I2C> {
     type Error = I2C::Error;
-    define_as5600_methods!();
+    define_as5600_logic!(
+        sync,
+        read_u8_internal,
+        read_u16_internal,
+        read_u16_internal_reg,
+        write_u16_internal
+    );
 }
 
 impl<I2C: i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
-    define_internal_helpers!();
+    define_internal_helpers_logic!(
+        sync,
+        read_u8_internal,
+        read_u16_internal,
+        read_u16_internal_reg,
+        write_u16_internal
+    );
 
     /// Permanently burns ZPOS and MPOS settings to the chip.
     ///
@@ -417,18 +335,31 @@ impl<I2C: i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
     }
 }
 
+// Generate Asynchronous implementation
 #[cfg(feature = "async")]
 use embedded_hal_async::i2c as async_i2c;
 
 #[cfg(feature = "async")]
 impl<I2C: async_i2c::I2c<SevenBitAddress>> AS5600AsyncInterface for AS5600Driver<I2C> {
     type Error = I2C::Error;
-    define_as5600_methods!(async);
+    define_as5600_logic!(
+        async,
+        read_u8_internal_async,
+        read_u16_internal_async,
+        read_u16_internal_reg_async,
+        write_u16_internal_async
+    );
 }
 
 #[cfg(feature = "async")]
 impl<I2C: async_i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
-    define_internal_helpers!(async);
+    define_internal_helpers_logic!(
+        async,
+        read_u8_internal_async,
+        read_u16_internal_async,
+        read_u16_internal_reg_async,
+        write_u16_internal_async
+    );
 }
 
 #[cfg(all(test, feature = "mock"))]
@@ -644,6 +575,24 @@ mod tests {
         assert_eq!(diag.agc, 50);
         assert_eq!(diag.magnitude, 3000);
         assert_eq!(diag.magnet_status.detected, true);
+    }
+
+    #[test]
+    fn test_read_angle_with_status() {
+        let mock = AS5600Mock::new();
+        mock.mock_set_angle(2048);
+        let status = MagnetStatus {
+            detected: true,
+            too_weak: true,
+            too_strong: false,
+        };
+        mock.mock_set_status(status);
+
+        let mut driver = AS5600Driver::new(mock);
+        let result = AS5600Interface::read_angle_with_status(&mut driver).unwrap();
+
+        assert_eq!(result.angle, 2048);
+        assert_eq!(result.status, status);
     }
 
     #[cfg(feature = "async")]

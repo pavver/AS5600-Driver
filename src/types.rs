@@ -375,6 +375,16 @@ impl Default for Configuration {
     }
 }
 
+/// Information about the current angle and magnet status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct AngleWithStatus {
+    /// The current 12-bit angle after all filters.
+    pub angle: u16,
+    /// Current health status of the magnetic system.
+    pub status: MagnetStatus,
+}
+
 /// A comprehensive snapshot of the sensor status and readings.
 ///
 /// This structure is used for optimized batch reading of all diagnostic

@@ -63,6 +63,9 @@ pub trait AS5600Interface {
     /// Checks if the sensor is connected and responding on the I2C bus.
     fn is_connected(&mut self) -> bool;
 
+    /// Reads both the 12-bit angle and magnet status in one optimized transaction.
+    fn read_angle_with_status(&mut self) -> Result<AngleWithStatus, AS5600Error<Self::Error>>;
+
     /// Reads all diagnostic data (Angle, Raw Angle, Status, AGC, Magnitude) in one optimized transaction.
     fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>>;
 }
@@ -95,5 +98,10 @@ pub trait AS5600AsyncInterface {
     async fn get_max_angle(&mut self) -> Result<u16, AS5600Error<Self::Error>>;
     async fn set_max_angle(&mut self, angle: u16) -> Result<(), AS5600Error<Self::Error>>;
     async fn get_burn_count(&mut self) -> Result<u8, AS5600Error<Self::Error>>;
+
+    /// Reads both the 12-bit angle and magnet status in one optimized transaction.
+    async fn read_angle_with_status(&mut self)
+    -> Result<AngleWithStatus, AS5600Error<Self::Error>>;
+
     async fn read_all_diagnostics(&mut self) -> Result<Diagnostics, AS5600Error<Self::Error>>;
 }

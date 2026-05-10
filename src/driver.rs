@@ -4,7 +4,7 @@ use crate::traits::AS5600Interface;
 use crate::types::*;
 use embedded_hal::i2c::{self, SevenBitAddress};
 
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", test))]
 use crate::traits::AS5600AsyncInterface;
 
 /// Main driver for the AS5600 sensor.
@@ -397,10 +397,10 @@ impl<I2C: i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
 }
 
 // Generate Asynchronous implementation
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", test))]
 use embedded_hal_async::i2c as async_i2c;
 
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", test))]
 impl<I2C: async_i2c::I2c<SevenBitAddress>> AS5600AsyncInterface for AS5600Driver<I2C> {
     type Error = I2C::Error;
     define_as5600_logic!(
@@ -412,7 +412,7 @@ impl<I2C: async_i2c::I2c<SevenBitAddress>> AS5600AsyncInterface for AS5600Driver
     );
 }
 
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", test))]
 impl<I2C: async_i2c::I2c<SevenBitAddress>> AS5600Driver<I2C> {
     define_internal_helpers_logic!(
         async,
@@ -667,7 +667,7 @@ mod tests {
         ));
     }
 
-    #[cfg(feature = "async")]
+    #[cfg(any(feature = "async", test))]
     mod async_tests {
         use super::*;
         use crate::traits::AS5600AsyncInterface;

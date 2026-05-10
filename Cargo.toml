@@ -42,3 +42,4 @@ defmt = { version = "1.0.1", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
+embedded-hal-async = "1.0"

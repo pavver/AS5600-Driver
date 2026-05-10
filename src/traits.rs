@@ -118,7 +118,7 @@ pub trait AS5600Interface {
 ///
 /// This trait provides the same functionality as [`AS5600Interface`] but uses
 /// asynchronous methods compatible with `embedded-hal-async`.
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", test))]
 #[allow(async_fn_in_trait)]
 pub trait AS5600AsyncInterface {
     define_as5600_trait_methods!(async);

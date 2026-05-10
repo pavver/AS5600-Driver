@@ -247,7 +247,7 @@ impl embedded_hal::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
     }
 }
 
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", test))]
 impl embedded_hal_async::i2c::I2c<embedded_hal::i2c::SevenBitAddress> for AS5600Mock {
     async fn read(&mut self, address: u8, read: &mut [u8]) -> Result<(), Self::Error> {
         embedded_hal::i2c::I2c::read(self, address, read)
